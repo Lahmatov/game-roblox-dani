@@ -4,6 +4,7 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local PlayerState = require(script.Parent.PlayerState)
+local Participants = require(script.Parent.Participants)
 
 local Trophy = {}
 
@@ -49,6 +50,12 @@ local function buildModel(): (Model, BasePart)
 		piece(Enum.PartType.Ball, Vector3.new(1.3, 1.3, 1.3), Vector3.new(0, 2.5, 0)),
 		piece(Enum.PartType.Ball, Vector3.new(1.4, 1.4, 1.4), Vector3.new(0, 3.4, 0)),
 	}
+	-- Ручки по бокам, как у настоящего кубка
+	for _, side in { -1, 1 } do
+		table.insert(parts, piece(Enum.PartType.Block, Vector3.new(0.6, 0.25, 0.25), Vector3.new(side * 0.85, 2.95, 0)))
+		table.insert(parts, piece(Enum.PartType.Block, Vector3.new(0.25, 1.05, 0.25), Vector3.new(side * 1.1, 2.55, 0)))
+		table.insert(parts, piece(Enum.PartType.Block, Vector3.new(0.6, 0.25, 0.25), Vector3.new(side * 0.85, 2.15, 0)))
+	end
 	for _, p in parts do
 		local weld = Instance.new("WeldConstraint")
 		weld.Part0 = root
@@ -94,7 +101,7 @@ local function groundBelow(position: Vector3): Vector3
 	if model then
 		table.insert(ignore, model)
 	end
-	for _, player in game:GetService("Players"):GetPlayers() do
+	for _, player in Participants.all() do
 		if player.Character then
 			table.insert(ignore, player.Character)
 		end
@@ -109,10 +116,35 @@ function Trophy.init(state: Folder)
 	setCarrier(nil)
 end
 
+-- Выбрать место подальше от всех игроков, чтобы никто не стоял прямо на Кубке
+local function chooseSpot(spots: { Vector3 }, avoid: { Vector3 }): Vector3
+	local good, farthest, farthestDistance = {}, spots[1], -1
+	for _, spot in spots do
+		local nearest = math.huge
+		for _, p in avoid do
+			nearest = math.min(nearest, (spot - p).Magnitude)
+		end
+		if nearest >= Config.TROPHY_MIN_DISTANCE then
+			table.insert(good, spot)
+		end
+		if nearest > farthestDistance then
+			farthest, farthestDistance = spot, nearest
+		end
+	end
+	return if #good > 0 then good[math.random(1, #good)] else farthest
+end
+
 function Trophy.spawn(spots: { Vector3 })
 	Trophy.remove()
 	model, base = buildModel()
-	placeAt(spots[math.random(1, #spots)])
+	local avoid = {}
+	for _, p in Participants.all() do
+		local position = PlayerState.getPosition(p)
+		if position then
+			table.insert(avoid, position)
+		end
+	end
+	placeAt(chooseSpot(spots, avoid))
 	model.Parent = Workspace
 	pickupBlockedUntil = 0
 
@@ -152,6 +184,14 @@ end
 
 function Trophy.getCarrier(): Player?
 	return carrier
+end
+
+-- Где лежит Кубок (nil, если его нет или его несут)
+function Trophy.getGroundPosition(): Vector3?
+	if base and not carrier then
+		return base.Position
+	end
+	return nil
 end
 
 function Trophy.pickUp(player: Player)

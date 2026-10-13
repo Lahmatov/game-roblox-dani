@@ -132,6 +132,11 @@ local function trophy()
 	return Mock.workspace:FindFirstChild("WorldCup")
 end
 
+check(GameState:GetAttribute("BotsEnabled") == true, "боты включены по умолчанию")
+fire("ToggleBots", nil, false)
+Mock.advance(0.1)
+check(GameState:GetAttribute("BotsEnabled") == false, "ботов можно выключить (для проверок с живыми игроками)")
+
 section("Игроки заходят")
 local ana = Mock.addPlayer("Ana")
 local bo = Mock.addPlayer("Bo")
@@ -389,6 +394,13 @@ for _, s in stadium.Statues:GetChildren() do
 	end
 end
 check(allAsleep, "статуи вернулись на место и снова окаменели")
+-- В следующем раунде водит кто-то из ботов-людей, но не Даня
+for _, p in { ana, bo, cid } do
+	if p ~= seeker then
+		fire("Volunteer", p, true)
+		break
+	end
+end
 check(Mock.advanceUntil(function()
 	return phase() == "End"
 end, 120), "время раунда кончилось")
@@ -409,7 +421,8 @@ for _, p in all do
 	end
 end
 teleport(seeker, V(-160, 0, -180))
-local carrier = hiders[1]
+check(role(dani) == "Hider", "Даня прячется")
+local carrier = hiders[1] == dani and hiders[2] or hiders[1]
 local tp = trophy().PrimaryPart.Position
 teleport(carrier, tp + V(5, 0, 0))
 goTo(carrier, tp)
@@ -490,6 +503,140 @@ local dani2 = Mock.addPlayer("Dani", userId)
 Mock.advance(0.5)
 check(dani2:GetAttribute("Coins") == savedCoins, "Даня вышел и зашёл — монеты сохранились (" .. tostring(savedCoins) .. ")")
 check(string.find(dani2:GetAttribute("OwnedKits"), "Stars", 1, true) ~= nil, "купленная форма тоже сохранилась")
+
+-- БОТЫ ----------------------------------------------------------------
+section("Боты: играем одни")
+Config.ROUND_TIME = 600
+for _, p in Players:GetPlayers() do
+	if p ~= dani2 then
+		Mock.removePlayer(p)
+	end
+end
+dani = dani2
+Mock.spawnCharacter(dani)
+Mock.localPlayer = dani
+Players.LocalPlayer = dani
+Mock.runScript(playerScripts.Main, "client")
+Mock.advance(1)
+check(#Players:GetPlayers() == 1, "на сервере остался один Даня")
+Mock.advance(Config.INTERMISSION_TIME + 2)
+check(phase() == "Waiting", "без ботов один игрок ждёт")
+local botsButton = findGui(dani, function(d)
+	return d.ClassName == "TextButton" and d.Text == "Боты: ВЫКЛ"
+end)
+check(botsButton ~= nil, "в лобби есть кнопка «Боты: ВЫКЛ»")
+botsButton.Activated:Fire()
+Mock.advance(1.5)
+check(GameState:GetAttribute("BotsEnabled") == true and botsButton.Text == "Боты: ВКЛ", "нажал — боты включены")
+fire("Volunteer", dani, true)
+check(Mock.advanceUntil(function()
+	return phase() == "Hiding"
+end, Config.INTERMISSION_TIME + 3), "раунд начался с одним человеком")
+
+local function botCharacters()
+	local list = {}
+	for _, m in Mock.workspace:GetChildren() do
+		if m:IsA("Model") and string.find(m.Name, "Бот", 1, true) then
+			table.insert(list, m)
+		end
+	end
+	return list
+end
+local bots = botCharacters()
+check(#bots == Config.BOT_FILL_TO - 1, "добавлено ботов: " .. #bots .. " (всего участников " .. Config.BOT_FILL_TO .. ")")
+check(announced("В игру добавлены боты"), "сообщение «В игру добавлены боты»")
+check(role(dani) == "Seeker", "Даня водит (он хотел)")
+local startPositions = {}
+for i, m in bots do
+	startPositions[i] = m.HumanoidRootPart.Position
+end
+Mock.advance(20)
+local movedCount = 0
+for i, m in bots do
+	if (m.HumanoidRootPart.Position - startPositions[i]).Magnitude > 10 then
+		movedCount += 1
+	end
+end
+check(movedCount >= #bots - 1, "боты разбежались прятаться (" .. movedCount .. " из " .. #bots .. ")")
+check(Mock.advanceUntil(function()
+	return phase() == "Seeking"
+end, 30), "поиски начались")
+
+-- Даня ловит одного бота
+local target = bots[1]
+teleport(dani, target.HumanoidRootPart.Position + V(8, -3, 0))
+local caught = Mock.advanceUntil(function()
+	if phase() ~= "Seeking" or not target.Parent then
+		return false
+	end
+	goTo(dani, target.HumanoidRootPart.Position - V(0, 3, 0))
+	return GameState:GetAttribute("HidersJailed") >= 1
+end, 30)
+check(caught, "Даня догнал и поймал бота")
+check(announced("поймал Бот"), "сообщение «Водящий поймал Бот ...»")
+
+-- Пойманный бот подходит к решётке
+check(Mock.advanceUntil(function()
+	for _, m in botCharacters() do
+		local p = m.HumanoidRootPart.Position
+		if (p - V(-124, 3, 45)).Magnitude < 9 and p.X > -124 + 3 then
+			return true
+		end
+	end
+	return false
+end, 8), "пойманный бот подошёл к решётке, чтобы его освободили")
+
+-- Даня уходит далеко — боты-спасатели освобождают друга, а бот с Кубком бежит к воротам
+teleport(dani, V(150, 0, 150))
+local since = Mock.time()
+local rescued = Mock.advanceUntil(function()
+	return announced("освободил", since - 10) or phase() ~= "Seeking"
+end, 120)
+check(rescued, "бот прибежал к тюрьме и освободил друга")
+local scored = Mock.advanceUntil(function()
+	return phase() ~= "Seeking"
+end, 400)
+check(scored and announced("забил Кубок", since), "боты нашли Кубок и забили его в ворота")
+print(string.format("  раунд с ботами длился %.0f с", Mock.time() - since))
+Mock.advance(Config.END_TIME + 1)
+check(#botCharacters() == 0, "после раунда боты ушли")
+check(role(dani) == "Lobby", "Даня вернулся в лобби")
+
+section("Боты: бот водит")
+fire("Volunteer", dani, false)
+check(Mock.advanceUntil(function()
+	return phase() == "Seeking"
+end, 90), "раунд с ботами начался снова")
+check(role(dani) == "Hider", "водит бот, Даня прячется")
+local botSeeker
+for _, m in botCharacters() do
+	if m.Head:FindFirstChild("Flashlight") then
+		botSeeker = m
+	end
+end
+check(botSeeker ~= nil, "у бота-водящего фонарик")
+teleport(dani, botSeeker.HumanoidRootPart.Position + V(35, -3, 0))
+check(Mock.advanceUntil(function()
+	return role(dani) == "Jailed"
+end, 90), "бот-водящий заметил Даню, догнал и поймал")
+check(Mock.advanceUntil(function()
+	return phase() == "End"
+end, Config.ROUND_TIME + 10), "раунд с ботом-водящим закончился")
+Mock.advance(Config.END_TIME + 1)
+
+section("Боты: человек ушёл")
+check(Mock.advanceUntil(function()
+	return phase() == "Seeking"
+end, 90), "ещё один раунд")
+Mock.removePlayer(dani)
+check(Mock.advanceUntil(function()
+	return phase() == "End"
+end, 2), "последний человек ушёл — раунд закончился")
+check(announced("Все игроки ушли"), "сообщение «Все игроки ушли»")
+Mock.advance(Config.END_TIME + 1)
+check(#botCharacters() == 0, "боты убраны")
+Mock.advance(5)
+check(phase() == "Waiting", "сервер ждёт новых игроков")
 
 section("Итог")
 for _, e in Mock.errors do

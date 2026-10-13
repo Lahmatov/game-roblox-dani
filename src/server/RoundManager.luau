@@ -10,6 +10,8 @@ local Trophy = require(script.Parent.Trophy)
 local Statues = require(script.Parent.Statues)
 local Economy = require(script.Parent.Economy)
 local Abilities = require(script.Parent.Abilities)
+local Participants = require(script.Parent.Participants)
+local Bots = require(script.Parent.Bots)
 
 local RoundManager = {}
 
@@ -212,6 +214,9 @@ end
 
 -- Одна проверка во время поисков. Возвращает победителя ("Hiders" / "Seeker") и причину.
 local function tick(): (string?, string?, Player?)
+	if #Participants.real() == 0 then
+		return nil, "Все игроки ушли.", nil
+	end
 	if not seeker or not seeker.Parent then
 		return "Hiders", "Водящий ушёл из игры. Прячущиеся победили!", nil
 	end
@@ -276,8 +281,17 @@ local function tick(): (string?, string?, Player?)
 	return nil, nil, nil
 end
 
-local function playersInGame(): { Player }
-	return Players:GetPlayers()
+local function botsEnabled(): boolean
+	return gameState:GetAttribute("BotsEnabled") == true
+end
+
+-- Хватает ли людей, чтобы начать раунд (с ботами хватает и одного)
+local function enoughPlayers(): boolean
+	local real = #Participants.real()
+	if botsEnabled() then
+		return real >= 1
+	end
+	return real >= Config.MIN_PLAYERS
 end
 
 local function waitPhase(seconds: number, phase: string, abort: (() -> boolean)?): boolean
@@ -320,13 +334,14 @@ local function endRound(winner: string?, reason: string, hero: Player?)
 	task.wait(Config.END_TIME)
 
 	Trophy.remove()
-	for _, player in Players:GetPlayers() do
+	for _, player in Participants.all() do
 		removeSeekerGear(player)
 		PlayerState.setRole(player, "Lobby")
 		PlayerState.reset(player)
 		Abilities.resetCooldowns(player)
 		PlayerState.teleport(player, map.LobbyCFrame)
 	end
+	Bots.despawnAll()
 	if seeker then
 		lastSeeker = seeker
 	end
@@ -336,7 +351,18 @@ local function endRound(winner: string?, reason: string, hero: Player?)
 end
 
 local function runRound()
-	local players = playersInGame()
+	-- Добавляем ботов, если людей мало
+	if botsEnabled() then
+		local real = #Participants.real()
+		local count = math.clamp(Config.BOT_FILL_TO - real, 0, Config.MAX_HIDERS + 1 - real)
+		for _ = 1, count do
+			Bots.spawn()
+		end
+		if count > 0 then
+			announce("В игру добавлены боты: " .. count, Color3.fromRGB(150, 200, 255))
+		end
+	end
+	local players = Participants.all()
 	seeker = chooseSeeker(players)
 	table.clear(hiders)
 	for _, player in players do
@@ -361,10 +387,12 @@ local function runRound()
 	announce(currentSeeker.DisplayName .. " водит! Прячьтесь!", HIDER_GREEN)
 
 	local finished = waitPhase(Config.HIDE_TIME, "Hiding", function()
-		return not currentSeeker.Parent or #hidersIn("Hider") == 0
+		return not currentSeeker.Parent or #hidersIn("Hider") == 0 or #Participants.real() == 0
 	end)
 	if not finished then
-		if not currentSeeker.Parent then
+		if #Participants.real() == 0 then
+			endRound(nil, "Все игроки ушли.", nil)
+		elseif not currentSeeker.Parent then
 			endRound("Hiders", "Водящий ушёл из игры. Прячущиеся победили!", nil)
 		else
 			endRound(nil, "Все прячущиеся ушли из игры.", nil)
@@ -428,6 +456,14 @@ function RoundManager.start(builtMap)
 			onCharacterAdded(player, character)
 		end)
 	end
+	gameState:SetAttribute("BotsEnabled", Config.BOTS_ENABLED)
+	Bots.init(map, gameState)
+	Remotes.get("ToggleBots").OnServerEvent:Connect(function(_player, enabled)
+		if type(enabled) == "boolean" then
+			gameState:SetAttribute("BotsEnabled", enabled)
+		end
+	end)
+
 	Players.PlayerAdded:Connect(setupPlayer)
 	for _, player in Players:GetPlayers() do
 		setupPlayer(player)
@@ -449,12 +485,12 @@ function RoundManager.start(builtMap)
 			-- Ждём игроков
 			setPhase("Waiting")
 			updateCounters()
-			while #playersInGame() < Config.MIN_PLAYERS do
+			while not enoughPlayers() do
 				task.wait(1)
 			end
 
 			local ready = waitPhase(Config.INTERMISSION_TIME, "Intermission", function()
-				return #playersInGame() < Config.MIN_PLAYERS
+				return not enoughPlayers()
 			end)
 			if ready then
 				local ok, err = pcall(runRound)
@@ -462,12 +498,13 @@ function RoundManager.start(builtMap)
 					warn("Ошибка в раунде:", err)
 					Statues.disable()
 					Trophy.remove()
-					for _, player in Players:GetPlayers() do
+					for _, player in Participants.all() do
 						removeSeekerGear(player)
 						PlayerState.setRole(player, "Lobby")
 						PlayerState.reset(player)
 						PlayerState.teleport(player, map.LobbyCFrame)
 					end
+					Bots.despawnAll()
 					seeker = nil
 					table.clear(hiders)
 				end

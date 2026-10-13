@@ -99,6 +99,9 @@ local kickButton = button(abilities, "Мяч (F)", UDim2.new(1, 0, 0, 58), UDim2
 -- Кнопка «Хочу водить»
 local volunteerButton = button(gui, "", UDim2.fromOffset(200, 54), UDim2.new(0, 12, 0.5, -60), RED)
 
+-- Кнопка «Боты»
+local botsButton = button(gui, "", UDim2.fromOffset(200, 54), UDim2.new(0, 12, 0.5, -124), Color3.fromRGB(40, 90, 170))
+
 -- Магазин
 local shopButton = button(gui, "Магазин", UDim2.fromOffset(200, 54), UDim2.new(0, 12, 0.5, 4), Color3.fromRGB(200, 140, 0))
 local coinsLabel = label(gui, "", UDim2.fromOffset(200, 30), UDim2.new(0, 12, 0.5, 64))
@@ -187,6 +190,10 @@ closeButton.Activated:Connect(function()
 	shop.Visible = false
 end)
 
+botsButton.Activated:Connect(function()
+	Remotes.get("ToggleBots"):FireServer(not gameState:GetAttribute("BotsEnabled"))
+end)
+
 volunteerButton.Activated:Connect(function()
 	Remotes.get("Volunteer"):FireServer(not player:GetAttribute("Volunteer"))
 end)
@@ -264,8 +271,9 @@ RunService.RenderStepped:Connect(function(dt)
 	local left = (gameState:GetAttribute("PhaseEndsAt") or 0) - t
 	local role = player:GetAttribute("Role") or "Lobby"
 
+	local botsOn = gameState:GetAttribute("BotsEnabled") == true
 	if phase == "Waiting" then
-		phaseLabel.Text = "Ждём игроков (нужно " .. Config.MIN_PLAYERS .. ")"
+		phaseLabel.Text = if botsOn then "Сейчас начнём с ботами..." else "Ждём игроков (нужно " .. Config.MIN_PLAYERS .. ")"
 	elseif phase == "Intermission" then
 		phaseLabel.Text = "Раунд через " .. formatTime(left)
 	elseif phase == "Hiding" then
@@ -317,6 +325,9 @@ RunService.RenderStepped:Connect(function(dt)
 
 	local inLobby = role == "Lobby"
 	volunteerButton.Visible = inLobby and phase ~= "Hiding" and phase ~= "Seeking"
+	botsButton.Visible = volunteerButton.Visible
+	botsButton.Text = if botsOn then "Боты: ВКЛ" else "Боты: ВЫКЛ"
+	botsButton.BackgroundColor3 = if botsOn then Color3.fromRGB(40, 90, 170) else Color3.fromRGB(70, 70, 80)
 	if player:GetAttribute("Volunteer") then
 		volunteerButton.Text = "Я хочу водить ✔"
 		volunteerButton.BackgroundColor3 = RED

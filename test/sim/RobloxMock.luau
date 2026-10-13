@@ -427,6 +427,7 @@ local SIGNALS = {
 	Touched = true,
 	ChildAdded = true,
 	Died = true,
+	Running = true,
 }
 
 local data = setmetatable({}, { __mode = "k" })
@@ -779,8 +780,55 @@ end
 function methods.GetServerTimeNow(_self)
 	return now
 end
-function methods.Raycast(_self, origin, _direction, _params)
-	return { Position = v3(origin.X, 0, origin.Z) }
+function methods.Raycast(_self, origin, direction, _params)
+	-- Единственное, во что попадает луч в имитации, — земля (y = 0)
+	local endY = origin.Y + direction.Y
+	if origin.Y >= 0 and endY <= 0 and direction.Y < 0 then
+		local t = origin.Y / -direction.Y
+		return { Position = origin + direction * t }
+	end
+	return nil
+end
+-- PathfindingService: путь — прямая линия (стен в имитации нет)
+function methods.CreatePath(_self, _params)
+	local path = { Status = Enum.PathStatus.Success, _points = {} }
+	function path.ComputeAsync(self, from, to)
+		self._points = {
+			{ Position = from, Action = Enum.PathWaypointAction.Walk },
+			{ Position = to, Action = Enum.PathWaypointAction.Walk },
+		}
+	end
+	function path.GetWaypoints(self)
+		return self._points
+	end
+	return path
+end
+-- Players:CreateHumanoidModelFromDescription
+function methods.CreateHumanoidModelFromDescription(_self, _description, _rigType)
+	local character = Instance.new("Model")
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Parent = character
+	local head = Instance.new("Part")
+	head.Name = "Head"
+	head.CFrame = CFrame.new(0, 1.5, 0)
+	head.Parent = character
+	local humanoid = Instance.new("Humanoid")
+	humanoid.Parent = character
+	Instance.new("Animator").Parent = humanoid
+	Instance.new("LocalScript").Name = "Animate"
+	character.PrimaryPart = root
+	return character
+end
+function methods.LoadAnimation(_self, _animation)
+	local track = { IsPlaying = false }
+	function track.Play(t)
+		t.IsPlaying = true
+	end
+	function track.Stop(t)
+		t.IsPlaying = false
+	end
+	return track
 end
 -- DataStoreService
 function methods.GetDataStore(_self, name)

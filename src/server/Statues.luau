@@ -2,12 +2,12 @@
 --   зелёная статуя помогает (кого коснётся — тот бегает быстрее),
 --   красная статуя мешает (кого коснётся — тот замирает и роняет Кубок).
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local PlayerState = require(script.Parent.PlayerState)
 local Trophy = require(script.Parent.Trophy)
+local Participants = require(script.Parent.Participants)
 
 local Statues = {}
 
@@ -139,7 +139,7 @@ end
 
 local function nearestPlayer(position: Vector3, range: number): (Player?, Vector3?)
 	local best, bestPosition, bestDistance = nil, nil, range
-	for _, player in Players:GetPlayers() do
+	for _, player in Participants.all() do
 		local role = PlayerState.getRole(player)
 		if role == "Hider" or role == "Seeker" then
 			local p = PlayerState.getPosition(player)

@@ -6,6 +6,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local Participants = require(script.Parent.Participants)
 
 local PlayerState = {}
 
@@ -112,6 +113,9 @@ local function speedFor(player: Player, s: Status, t: number): number
 	if s.boostUntil > t then
 		speed += Config.STATUE_BOOST_BONUS
 	end
+	if Participants.isBot(player) then
+		speed += if role == "Seeker" then Config.BOT_SEEKER_SPEED_BONUS else Config.BOT_HIDER_SPEED_BONUS
+	end
 	return speed
 end
 
@@ -128,7 +132,7 @@ function PlayerState.start()
 		end
 		acc = 0
 		local t = now()
-		for _, player in Players:GetPlayers() do
+		for _, player in Participants.all() do
 			local _, humanoid = PlayerState.getCharacterParts(player)
 			if humanoid then
 				local s = status(player)

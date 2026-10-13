@@ -508,7 +508,14 @@ function StadiumBuilder.build()
 
 	local jailCenter = Vector3.new(-124, 0, 45)
 	local jailHalf = buildJail(root, jailCenter)
-	table.insert(trophySpots, Vector3.new(-124, 0, 60)) -- за тюрьмой
+
+	-- Места, где прячутся боты: все места Кубка и ещё несколько
+	local hideSpots = table.clone(trophySpots)
+	for _, s in { -1, 1 } do
+		table.insert(hideSpots, Vector3.new(s * (FIELD_X + GOAL_DEPTH + 3), 0, 5)) -- за сеткой ворот
+		table.insert(hideSpots, Vector3.new(s * (FIELD_X + GOAL_DEPTH + 3), 0, -5))
+		table.insert(hideSpots, Vector3.new(s * 125, 0, s * -100)) -- углы стадиона
+	end
 
 	local lobbyCenter = Vector3.new(0, 160, 0)
 	buildLobby(root, lobbyCenter)
@@ -537,6 +544,7 @@ function StadiumBuilder.build()
 		JailHalf = jailHalf,
 		Goals = goals,
 		TrophySpots = trophySpots,
+		HideSpots = hideSpots,
 		StatueHomes = statueHomes,
 		Scoreboard = scoreboard,
 		StatueColor = STATUE_STONE,

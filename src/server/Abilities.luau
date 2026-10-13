@@ -2,7 +2,6 @@
 -- Фонарик водящего выдаёт RoundManager.
 
 local Debris = game:GetService("Debris")
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -10,6 +9,7 @@ local Workspace = game:GetService("Workspace")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local PlayerState = require(script.Parent.PlayerState)
+local Participants = require(script.Parent.Participants)
 
 local Abilities = {}
 
@@ -26,7 +26,7 @@ local function canUse(player: Player): boolean
 end
 
 local function findSeeker(): Player?
-	for _, player in Players:GetPlayers() do
+	for _, player in Participants.all() do
 		if PlayerState.getRole(player) == "Seeker" then
 			return player
 		end
@@ -83,25 +83,37 @@ function Abilities.start(state: Folder, announceFn: (string, Color3?) -> ())
 	announce = announceFn
 
 	Remotes.get("Dash").OnServerEvent:Connect(function(player)
-		local t = PlayerState.now()
-		if not canUse(player) or (player:GetAttribute("DashReadyAt") or 0) > t then
-			return
-		end
-		player:SetAttribute("DashReadyAt", t + Config.DASH_COOLDOWN)
-		PlayerState.dash(player, Config.DASH_DURATION)
+		Abilities.tryDash(player)
 	end)
 
 	Remotes.get("Kick").OnServerEvent:Connect(function(player, direction)
-		local t = PlayerState.now()
-		if typeof(direction) ~= "Vector3" or direction ~= direction then
-			return
-		end
-		if not canUse(player) or phase() ~= "Seeking" or (player:GetAttribute("KickReadyAt") or 0) > t then
-			return
-		end
-		player:SetAttribute("KickReadyAt", t + Config.KICK_COOLDOWN)
-		kickBall(player, direction)
+		Abilities.tryKick(player, direction)
 	end)
+end
+
+-- Рывок. Возвращает true, если получилось.
+function Abilities.tryDash(player): boolean
+	local t = PlayerState.now()
+	if not canUse(player) or (player:GetAttribute("DashReadyAt") or 0) > t then
+		return false
+	end
+	player:SetAttribute("DashReadyAt", t + Config.DASH_COOLDOWN)
+	PlayerState.dash(player, Config.DASH_DURATION)
+	return true
+end
+
+-- Пнуть мяч в направлении direction. Возвращает true, если получилось.
+function Abilities.tryKick(player, direction): boolean
+	local t = PlayerState.now()
+	if typeof(direction) ~= "Vector3" or direction ~= direction then
+		return false
+	end
+	if not canUse(player) or phase() ~= "Seeking" or (player:GetAttribute("KickReadyAt") or 0) > t then
+		return false
+	end
+	player:SetAttribute("KickReadyAt", t + Config.KICK_COOLDOWN)
+	kickBall(player, direction)
+	return true
 end
 
 function Abilities.resetCooldowns(player: Player)
