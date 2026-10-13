@@ -199,6 +199,10 @@ Config.KITS = {
 }
 Config.DEFAULT_KIT = "Lions"
 
+-- Фанатские баннеры и шутка про соперников на бортиках и трибунах (false — убрать)
+Config.FAN_BANTER = true
+Config.BANTER_TEXT = "БЕНФИКА — ОТСТОЙ!"
+
 -- Приколы
 Config.ADMIN_USER_IDS = {} -- кому ещё можно админ-панель (Даня из HERO_USER_ID — всегда)
 Config.ADMIN_IN_STUDIO = true -- в Roblox Studio админ-панель у всех, чтобы проверять

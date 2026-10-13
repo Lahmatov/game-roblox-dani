@@ -3,6 +3,8 @@
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 
+local FanZone = require(script.Parent.FanZone)
+
 local StadiumDetails = {}
 
 local WHITE = Color3.fromRGB(240, 240, 240)
@@ -25,7 +27,12 @@ local AD_TEXTS = {
 	"НЕ ПОПАДИСЬ ВОДЯЩЕМУ!",
 	"ОСВОБОДИ ДРУЗЕЙ!",
 	"СТАТУИ ОЖИВАЮТ...",
+	"SPORTING CP",
+	"ВПЕРЁД, ЛЬВЫ!",
 }
+if Config.FAN_BANTER then
+	table.insert(AD_TEXTS, Config.BANTER_TEXT)
+end
 
 local rng = Random.new(11)
 
@@ -178,8 +185,10 @@ end
 local function buildFloodlights(root: Instance, o)
 	local m = folder("Floodlights", root)
 	local warm = Color3.fromRGB(255, 248, 232)
-	for _, x in { -82, -27, 27, 82 } do
-		for _, z in { -32, 32 } do
+	local stepX = o.FieldX * 2 / 5
+	for i = 0, 4 do
+		local x = -o.FieldX + stepX * (i + 0.5)
+		for _, z in { -o.FieldZ * 0.36, o.FieldZ * 0.36 } do
 			local holder = part(m, CFrame.new(x, 46, z), Vector3.new(1, 1, 1), WHITE, Enum.Material.SmoothPlastic, false)
 			holder.Transparency = 1
 			local spot = Instance.new("SpotLight")
@@ -195,7 +204,7 @@ local function buildFloodlights(root: Instance, o)
 	-- Мачты в углах
 	for _, sx in { -1, 1 } do
 		for _, sz in { -1, 1 } do
-			local base = Vector3.new(sx * 150, 0, sz * 112)
+			local base = Vector3.new(sx * (o.FieldX + 40), 0, sz * (o.SideZ + 25))
 			local height = 72
 			local truss = Instance.new("TrussPart")
 			truss.Anchored = true
@@ -273,11 +282,11 @@ end
 local function buildSurroundings(root: Instance, o)
 	local m = folder("Surroundings", root)
 	-- Земля до горизонта и асфальт вокруг стадиона
-	part(m, CFrame.new(0, -1.3, 0), Vector3.new(1600, 2, 1600), Color3.fromRGB(42, 70, 40), Enum.Material.Grass)
+	part(m, CFrame.new(0, -1.3, 0), Vector3.new(2400, 2, 2400), Color3.fromRGB(42, 70, 40), Enum.Material.Grass)
 	local asphalt = Color3.fromRGB(55, 57, 62)
-	part(m, CFrame.new(0, -0.35, 0), Vector3.new(o.GroundX * 2 + 80, 0.5, o.GroundZ * 2 + 80), asphalt, Enum.Material.Asphalt)
+	part(m, CFrame.new(0, -0.35, 0), Vector3.new((o.GroundX + o.Fan) * 2, 0.5, (o.GroundZ + o.Fan) * 2), asphalt, Enum.Material.Asphalt)
 	-- Невидимый забор вокруг площади: из стадиона в город не убежать
-	local fx, fz = o.GroundX + 40, o.GroundZ + 40
+	local fx, fz = o.GroundX + o.Fan, o.GroundZ + o.Fan
 	for _, wall in
 		{
 			{ Vector3.new(fx, 30, 0), Vector3.new(2, 60, fz * 2) },
@@ -293,7 +302,7 @@ local function buildSurroundings(root: Instance, o)
 	end
 
 	-- Деревья и фонари по краю площади
-	local rx, rz = o.GroundX + 30, o.GroundZ + 30
+	local rx, rz = o.GroundX + o.Fan - 12, o.GroundZ + o.Fan - 12
 	for i = 0, 35 do
 		local a = i / 36 * math.pi * 2
 		local p = Vector3.new(math.cos(a) * rx, 0, math.sin(a) * rz)
@@ -306,7 +315,7 @@ local function buildSurroundings(root: Instance, o)
 	-- Ночной город на горизонте: дома с горящими окнами
 	for i = 0, 47 do
 		local a = i / 48 * math.pi * 2 + rng:NextNumber(-0.04, 0.04)
-		local dist = rng:NextNumber(330, 520)
+		local dist = rng:NextNumber(o.GroundX + o.Fan + 150, o.GroundX + o.Fan + 330)
 		local w, d, h = rng:NextNumber(25, 55), rng:NextNumber(25, 50), rng:NextNumber(30, 140)
 		local pos = Vector3.new(math.cos(a) * dist, h / 2 - 0.3, math.sin(a) * dist)
 		local cf = CFrame.lookAt(pos, Vector3.new(0, h / 2, 0))
@@ -361,7 +370,8 @@ function StadiumDetails.build(root: Instance, o)
 	buildStandDressing(root, o)
 	buildSurroundings(root, o)
 	buildRulesBoard(root, o)
-	return { AdBoards = labels }
+	local hide, trophy = FanZone.build(root, o)
+	return { AdBoards = labels, HideSpots = hide, TrophySpots = trophy }
 end
 
 -- Бегущая реклама: тексты на бортиках сменяются

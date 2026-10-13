@@ -20,5 +20,5 @@ StadiumDetails.animateAdBoards(map.AdBoards)
 -- Статуя сына: в лобби, где все появляются, и большая — за восточными воротами
 HeroStatue.build(map.Root, {
 	{ cf = CFrame.lookAt(map.LobbyCFrame.Position + Vector3.new(0, -3.5, -20), map.LobbyCFrame.Position + Vector3.new(0, -3.5, 0)), scale = 1.5 },
-	{ cf = CFrame.lookAt(Vector3.new(126, 0, -30), Vector3.new(0, 0, -30)), scale = 2 },
+	{ cf = map.HeroCFrame, scale = 2 },
 })

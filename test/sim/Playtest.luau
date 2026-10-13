@@ -77,7 +77,7 @@ for _, d in stadium:GetDescendants() do
 	end
 end
 print("  деталей на стадионе: " .. partCount)
-check(partCount > 300 and partCount < 5000, "размер стадиона разумный (300..5000 деталей)")
+check(partCount > 300 and partCount < 9000, "размер стадиона разумный (300..9000 деталей)")
 local statueCount = 0
 for _, s in stadium.Statues:GetChildren() do
 	if s:IsA("Model") then
@@ -86,6 +86,7 @@ for _, s in stadium.Statues:GetChildren() do
 end
 check(statueCount == 8, "8 статуй футболистов")
 local GameState = RS:WaitForChild("GameState")
+local MAP = Mock.require(server.StadiumBuilder, "server").lastMap
 local heroes = {}
 for _, d in stadium:GetDescendants() do
 	if d.Name == "HeroStatue" then
@@ -204,7 +205,7 @@ section("Раунд 1: поиски")
 check(Mock.advanceUntil(function()
 	return phase() == "Seeking"
 end, 50), "через 45 секунд водящего выпустили")
-check((pos(bo) - V(0, 3, 80)).Magnitude < 5, "водящий выходит из туннеля")
+check((pos(bo) - MAP.SeekerReleaseCFrame.Position).Magnitude < 5, "водящий выходит из туннеля")
 check(bo.Character.Head:FindFirstChild("Flashlight") ~= nil, "у водящего фонарик")
 check(bo.Character.Head:FindFirstChild("SeekerTag") ~= nil, "над водящим надпись ВОДЯЩИЙ")
 check(trophy() ~= nil, "Кубок мира спрятан на стадионе")
@@ -269,7 +270,7 @@ check(role(ana) == "Hider", "замёрзший водящий не может �
 check(Mock.advanceUntil(function()
 	return role(ana) == "Jailed"
 end, 6), "водящий отмёрз и поймал Ana")
-local jail = V(-124, 0, 45)
+local jail = MAP.JailCenter
 check((pos(ana) - jail).Magnitude < 9, "Ana в тюрьме")
 check(announced("поймал Ana"), "сообщение «Водящий поймал Ana»")
 Mock.advance(0.3)
@@ -349,7 +350,7 @@ goTo(cid, dropped)
 check(Mock.advanceUntil(function()
 	return GameState:GetAttribute("TrophyCarrier") == "Cid"
 end, 4), "Cid подобрал упавший Кубок")
-goTo(cid, V(113, 0, 0)) -- в восточные ворота
+goTo(cid, V((MAP.Goals[1].XMin + MAP.Goals[1].XMax) / 2, 0, 0)) -- в восточные ворота
 check(Mock.advanceUntil(function()
 	return phase() == "End"
 end, 20), "Cid добежал до ворот")
@@ -445,7 +446,7 @@ for _, p in all do
 	end
 end
 -- Все прячущиеся стоят возле статуй
-local homes = { V(-95, 0, 76), V(-60, 0, 76), V(60, 0, 76) }
+local homes = { MAP.StatueHomes[1].Position, MAP.StatueHomes[2].Position, MAP.StatueHomes[3].Position }
 for i, p in hiders do
 	teleport(p, homes[i] + V(0, 0, -6))
 end
@@ -671,7 +672,7 @@ check(announced("поймал Бот"), "сообщение «Водящий п�
 check(Mock.advanceUntil(function()
 	for _, m in botCharacters() do
 		local p = m.HumanoidRootPart.Position
-		if (p - V(-124, 3, 45)).Magnitude < 9 and p.X > -124 + 3 then
+		if (p - (MAP.JailCenter + V(0, 3, 0))).Magnitude < 9 and p.X > MAP.JailCenter.X + 3 then
 			return true
 		end
 	end

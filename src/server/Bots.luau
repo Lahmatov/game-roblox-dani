@@ -340,8 +340,16 @@ local function findSeeker()
 end
 
 local function goalTarget(position: Vector3): Vector3
-	local x = if position.X >= 0 then 113 else -113
-	return Vector3.new(x, 0, 0)
+	-- Середина ближайших ворот
+	local best, bestDistance = Vector3.zero, math.huge
+	for _, goal in map.Goals do
+		local center = Vector3.new((goal.XMin + goal.XMax) / 2, 0, 0)
+		local d = (center - Vector3.new(position.X, 0, position.Z)).Magnitude
+		if d < bestDistance then
+			best, bestDistance = center, d
+		end
+	end
+	return best
 end
 
 local function randomSpot(brain: Brain, spots: { Vector3 }): Vector3
@@ -381,7 +389,7 @@ local function thinkJailed(brain: Brain, position: Vector3)
 end
 
 local function openFieldSpot(): Vector3
-	return Vector3.new(math.random(-90, 90), 0, math.random(-55, 55))
+	return Vector3.new(math.random(-map.FieldX + 20, map.FieldX - 20), 0, math.random(-map.FieldZ + 15, map.FieldZ - 15))
 end
 
 -- Глупый бот иногда отвлекается: идёт куда-то или пляшет на месте
@@ -470,7 +478,7 @@ local function thinkHider(brain: Brain, position: Vector3)
 			away = -away
 		end
 		local escape = position + away.Unit * 30
-		escape = Vector3.new(math.clamp(escape.X, -130, 130), 0, math.clamp(escape.Z, -80, 80))
+		escape = Vector3.new(math.clamp(escape.X, -map.FieldX - 20, map.FieldX + 20), 0, math.clamp(escape.Z, -map.FieldZ - 10, map.FieldZ + 10))
 		brain.spot = nil
 		go(brain, escape, 1)
 		return

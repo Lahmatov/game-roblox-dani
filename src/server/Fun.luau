@@ -61,7 +61,7 @@ local function playersInRound()
 end
 
 local function randomPitchPoint(): Vector3
-	return Vector3.new(math.random(-95, 95), 0, math.random(-60, 60))
+	return Vector3.new(math.random(-map.FieldX + 15, map.FieldX - 15), 0, math.random(-map.FieldZ + 10, map.FieldZ - 10))
 end
 
 ----------------------------------------------------------------------
@@ -121,7 +121,7 @@ local function eventGiantBall()
 	ball.Size = Vector3.new(16, 16, 16)
 	ball.Color = Color3.new(1, 1, 1)
 	ball.Material = Enum.Material.SmoothPlastic
-	ball.Position = Vector3.new(if fromLeft then -100 else 100, 8, z)
+	ball.Position = Vector3.new(if fromLeft then -map.FieldX + 10 else map.FieldX - 10, 8, z)
 	ball.Parent = Workspace
 	pcall(function()
 		ball:SetNetworkOwner(nil)
@@ -230,7 +230,7 @@ function Fun.releaseLion(): boolean
 	if lion or not Trophy.getGroundPosition() and not Trophy.getCarrier() then
 		return false
 	end
-	local model, root, humanoid = buildLion(Vector3.new(0, 0, 78))
+	local model, root, humanoid = buildLion(map.TunnelExit)
 	lion = model
 	announce("На поле выбежал ЛЕВ! Он охотится за Кубком!", Color3.fromRGB(255, 160, 40))
 	Commentator.say("lion")
@@ -298,7 +298,7 @@ function Fun.releaseLion(): boolean
 			Trophy.detach(root.Position)
 		end
 		-- Лев убегает в туннель и исчезает
-		humanoid:MoveTo(Vector3.new(0, 0, 90))
+		humanoid:MoveTo(map.TunnelExit + Vector3.new(0, 0, 12))
 		task.wait(4)
 		model:Destroy()
 		if lion == model then
@@ -464,7 +464,7 @@ local function buildSecretRoom(root: Instance)
 	exitPrompt.Parent = exit
 
 	-- Люк у западного углового флажка
-	local hatchPosition = Vector3.new(-104, 0.1, -64)
+	local hatchPosition = Vector3.new(-map.FieldX + 6, 0.1, -map.FieldZ + 6)
 	local hatch = part(CFrame.new(hatchPosition) * CFrame.Angles(0, 0, math.rad(90)), Vector3.new(0.2, 3, 3), Color3.fromRGB(70, 72, 78), Enum.Material.DiamondPlate)
 	hatch.Shape = Enum.PartType.Cylinder
 	hatch.Name = "Hatch"
@@ -562,7 +562,8 @@ local ADMIN_COMMANDS = {
 		admin:SetAttribute("MoonMode", not admin:GetAttribute("MoonMode"))
 	end,
 	fireworks = function()
-		for _, offset in { Vector3.new(-80, 45, 85), Vector3.new(0, 50, 85), Vector3.new(80, 45, 85), Vector3.new(-80, 45, -85), Vector3.new(0, 50, -85), Vector3.new(80, 45, -85) } do
+		local z = map.SideZ
+		for _, offset in { Vector3.new(-80, 45, z), Vector3.new(0, 50, z), Vector3.new(80, 45, z), Vector3.new(-80, 45, -z), Vector3.new(0, 50, -z), Vector3.new(80, 45, -z) } do
 			Effects.confetti(offset, 200)
 		end
 		Sfx.play("Goal")

@@ -23,10 +23,13 @@ end
 local StadiumBuilder = {}
 
 -- Размеры поля (в студах). Центр поля — точка (0, 0, 0).
-local FIELD_X = 110 -- половина длины поля (ворота на x = ±110)
-local FIELD_Z = 70 -- половина ширины поля
-local GROUND_X = 190
-local GROUND_Z = 200
+-- Всё остальное (трибуны, тюрьма, мачты, места для пряток) считается от размера поля.
+local FIELD_X = 140 -- половина длины поля (ворота на x = ±140)
+local FIELD_Z = 88 -- половина ширины поля
+local SIDE_GAP = 15 -- от боковой линии до главной/южной трибуны
+local END_GAP = 25 -- от линии ворот до восточной/западной трибуны
+local GROUND_X = FIELD_X + 70
+local GROUND_Z = FIELD_Z + 100
 
 local GOAL_HALF_WIDTH = 8
 local GOAL_HEIGHT = 8
@@ -597,15 +600,19 @@ function StadiumBuilder.build()
 		end
 	end
 
-	local northCF = CFrame.new(0, 0, 85)
-	local southCF = CFrame.new(0, 0, -85) * CFrame.Angles(0, math.pi, 0)
-	local eastCF = CFrame.new(135, 0, 0) * CFrame.Angles(0, math.rad(90), 0)
-	local westCF = CFrame.new(-135, 0, 0) * CFrame.Angles(0, math.rad(-90), 0)
+	local sideZ = FIELD_Z + SIDE_GAP
+	local endX = FIELD_X + END_GAP
+	local sideLength = FIELD_X * 2 + 10
+	local endLength = sideZ * 2
+	local northCF = CFrame.new(0, 0, sideZ)
+	local southCF = CFrame.new(0, 0, -sideZ) * CFrame.Angles(0, math.pi, 0)
+	local eastCF = CFrame.new(endX, 0, 0) * CFrame.Angles(0, math.rad(90), 0)
+	local westCF = CFrame.new(-endX, 0, 0) * CFrame.Angles(0, math.rad(-90), 0)
 
-	addSpots(buildStand(root, "MainStand", northCF, 230, true))
-	addSpots(buildStand(root, "SouthStand", southCF, 230, false))
-	addSpots(buildStand(root, "EastStand", eastCF, 170, false))
-	addSpots(buildStand(root, "WestStand", westCF, 170, false))
+	addSpots(buildStand(root, "MainStand", northCF, sideLength, true))
+	addSpots(buildStand(root, "SouthStand", southCF, sideLength, false))
+	addSpots(buildStand(root, "EastStand", eastCF, endLength, false))
+	addSpots(buildStand(root, "WestStand", westCF, endLength, false))
 	addSpots(buildDressingRooms(root, northCF))
 
 	local scoreboardCF = eastCF * CFrame.new(0, ROOF_Y + 0.5 + 8, 18)
@@ -615,10 +622,11 @@ function StadiumBuilder.build()
 	-- Ещё места: за скамейками и в углах стадиона
 	table.insert(trophySpots, Vector3.new(-25, 0, FIELD_Z + 10.5))
 	table.insert(trophySpots, Vector3.new(25, 0, FIELD_Z + 10.5))
-	table.insert(trophySpots, Vector3.new(125, 0, 100))
-	table.insert(trophySpots, Vector3.new(-125, 0, -100))
+	local cornerX, cornerZ = FIELD_X + 15, sideZ + 15
+	table.insert(trophySpots, Vector3.new(cornerX, 0, cornerZ))
+	table.insert(trophySpots, Vector3.new(-cornerX, 0, -cornerZ))
 
-	local jailCenter = Vector3.new(-124, 0, 45)
+	local jailCenter = Vector3.new(-(FIELD_X + 14), 0, 45)
 	local jailHalf = buildJail(root, jailCenter)
 
 	-- Места, где прячутся боты: все места Кубка и ещё несколько
@@ -626,7 +634,7 @@ function StadiumBuilder.build()
 	for _, s in { -1, 1 } do
 		table.insert(hideSpots, Vector3.new(s * (FIELD_X + GOAL_DEPTH + 3), 0, 5)) -- за сеткой ворот
 		table.insert(hideSpots, Vector3.new(s * (FIELD_X + GOAL_DEPTH + 3), 0, -5))
-		table.insert(hideSpots, Vector3.new(s * 125, 0, s * -100)) -- углы стадиона
+		table.insert(hideSpots, Vector3.new(s * cornerX, 0, s * -cornerZ)) -- углы стадиона
 	end
 
 	local lobbyCenter = Vector3.new(0, 250, -650) -- далеко за городом, чтобы не висело над стадионом
@@ -638,7 +646,8 @@ function StadiumBuilder.build()
 	-- Места для статуй вдоль боковых линий
 	local statueHomes = {}
 	for _, sz in { -1, 1 } do
-		for _, x in { -95, -60, 60, 95 } do
+		for _, k in { -0.86, -0.54, 0.54, 0.86 } do
+			local x = math.round(k * FIELD_X)
 			local pos = Vector3.new(x, 0, sz * (FIELD_Z + 6))
 			table.insert(statueHomes, CFrame.lookAt(pos, Vector3.new(x, 0, 0)))
 		end
@@ -655,23 +664,39 @@ function StadiumBuilder.build()
 		RoofY = ROOF_Y,
 		StandDepth = STAND_DEPTH,
 		Stands = {
-			{ cf = northCF, length = 230, skip = 32 }, -- за главной трибуной стоят раздевалки
-			{ cf = southCF, length = 230 },
-			{ cf = eastCF, length = 170 },
-			{ cf = westCF, length = 170 },
+			{ cf = northCF, length = sideLength, skip = 32 }, -- за главной трибуной стоят раздевалки
+			{ cf = southCF, length = sideLength },
+			{ cf = eastCF, length = endLength },
+			{ cf = westCF, length = endLength },
 		},
 		BenchX = 25,
 		JailCenter = jailCenter,
 		LobbyCenter = lobbyCenter,
+		SideZ = sideZ,
+		EndX = endX,
+		Fan = 90, -- ширина фан-зоны вокруг стадиона
 	})
+	for _, p in details.HideSpots do
+		table.insert(hideSpots, p)
+	end
+	for _, p in details.TrophySpots do
+		table.insert(trophySpots, p)
+		table.insert(hideSpots, p)
+	end
 
 	root.Parent = Workspace
 
-	return {
+	local map = {
 		Root = root,
 		LobbyCFrame = CFrame.new(lobbyCenter + Vector3.new(0, 4, 0)),
 		SeekerBoxCFrame = CFrame.new(seekerBoxCenter + Vector3.new(0, 3, 0)),
-		SeekerReleaseCFrame = CFrame.lookAt(Vector3.new(0, 3, 80), Vector3.new(0, 3, 0)), -- выход из туннеля
+		SeekerReleaseCFrame = CFrame.lookAt(Vector3.new(0, 3, sideZ - 5), Vector3.new(0, 3, 0)), -- выход из туннеля
+		TunnelExit = Vector3.new(0, 0, sideZ - 5),
+		FieldX = FIELD_X,
+		FieldZ = FIELD_Z,
+		SideZ = sideZ,
+		EndX = endX,
+		HeroCFrame = CFrame.lookAt(Vector3.new(FIELD_X + 16, 0, -30), Vector3.new(0, 0, -30)),
 		HiderSpawnCenter = Vector3.new(0, 3, 0),
 		JailCenter = jailCenter,
 		JailHalf = jailHalf,
@@ -683,6 +708,8 @@ function StadiumBuilder.build()
 		StatueColor = STATUE_STONE,
 		AdBoards = details.AdBoards,
 	}
+	StadiumBuilder.lastMap = map
+	return map
 end
 
 return StadiumBuilder
