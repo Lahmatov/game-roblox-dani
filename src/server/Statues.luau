@@ -9,6 +9,7 @@ local PlayerState = require(script.Parent.PlayerState)
 local Trophy = require(script.Parent.Trophy)
 local Participants = require(script.Parent.Participants)
 local Sfx = require(script.Parent.Sfx)
+local Commentator = require(script.Parent.Commentator)
 
 local Statues = {}
 
@@ -31,6 +32,7 @@ type Statue = {
 local statues: { Statue } = {}
 local stoneColor = Color3.fromRGB(163, 162, 165)
 local enabled = false
+local forcedUntil = 0 -- админ-команда: статуи оживают даже вне раунда
 local generation = 0
 local announce: (string, Color3?) -> ()
 
@@ -189,7 +191,7 @@ local function wake(statue: Statue)
 
 	task.spawn(function()
 		local endsAt = os.clock() + Config.STATUE_AWAKE_TIME
-		while enabled and active() and os.clock() < endsAt do
+		while (enabled or os.clock() < forcedUntil) and active() and os.clock() < endsAt do
 			local target, targetPosition = nearestPlayer(statue.root.Position, 90)
 			if target and targetPosition then
 				statue.humanoid:MoveTo(targetPosition)
@@ -250,10 +252,22 @@ function Statues.enable()
 			end
 			if count > 0 then
 				Sfx.play("Statue")
+				Commentator.say("statue")
 				announce("Статуи ожили! Зелёные помогают, красные мешают!", Color3.fromRGB(255, 220, 60))
 			end
 		end
 	end)
+end
+
+-- Оживить все статуи сразу (админ-панель Дани)
+function Statues.wakeAll()
+	forcedUntil = os.clock() + Config.STATUE_AWAKE_TIME
+	for _, statue in statues do
+		if not statue.awake then
+			wake(statue)
+		end
+	end
+	Sfx.play("Statue")
 end
 
 function Statues.disable()

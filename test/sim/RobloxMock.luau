@@ -186,6 +186,13 @@ local Color3 = {
 Color3.fromRGB = function(r, g, b)
 	return Color3.new(r / 255, g / 255, b / 255)
 end
+Color3.fromHSV = function(h, s, v)
+	local i = math.floor(h * 6)
+	local f = h * 6 - i
+	local p, q, t = v * (1 - s), v * (1 - f * s), v * (1 - (1 - f) * s)
+	local rgb = ({ { v, t, p }, { q, v, p }, { p, v, t }, { p, q, v }, { t, p, v }, { v, p, q } })[i % 6 + 1]
+	return Color3.new(rgb[1], rgb[2], rgb[3])
+end
 
 local UDim = {
 	new = function(s, o)
@@ -434,6 +441,7 @@ local DEFAULTS = {
 	GuiObject = { Visible = true, Text = "", BackgroundTransparency = 0, TextTransparency = 0 },
 	IntValue = { Value = 0 },
 	Players = { RespawnTime = 5 },
+	Workspace = { Gravity = 196.2 },
 }
 
 local SIGNALS = {
@@ -453,6 +461,7 @@ local SIGNALS = {
 	ChildAdded = true,
 	Died = true,
 	Running = true,
+	Triggered = true,
 }
 
 local data = setmetatable({}, { __mode = "k" })
@@ -742,6 +751,11 @@ function methods.Stop(self)
 	data[self].props.IsPlaying = false
 end
 function methods.FireAllClients(self, ...)
+	if self.Name == "Comment" then
+		local text = ...
+		Mock.comments = Mock.comments or {}
+		table.insert(Mock.comments, text)
+	end
 	if self.Name == "Sfx" then
 		local name = ...
 		Mock.sfx[name] = (Mock.sfx[name] or 0) + 1

@@ -31,6 +31,7 @@ Config.BOT_LEVELS = {
 		DistractChance = 0.06, -- шанс отвлечься и пойти куда-то не туда
 		TalkChance = 0.04, -- шанс сказать глупость
 		TransformChance = 0.08, -- шанс превратиться в предмет (и всё равно ходить туда-сюда)
+		BananaChance = 0.02, -- шанс бросить банан, когда водящий рядом
 		SearchDelayMin = 90, -- когда начинают искать Кубок
 		SearchDelayMax = 240,
 		TrophySight = 8, -- замечают Кубок, только если почти наступили на него
@@ -52,6 +53,7 @@ Config.BOT_LEVELS = {
 		DistractChance = 0,
 		TalkChance = 0.01,
 		TransformChance = 0.04,
+		BananaChance = 0.03,
 		SearchDelayMin = 45,
 		SearchDelayMax = 150,
 		TrophySight = 15,
@@ -152,8 +154,12 @@ Config.SOUNDS = {
 	Taunt4 = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 1, Speed = 0.5 },
 	Taunt5 = { Id = "", Volume = 1, Start = 0, Length = 3 }, -- свой мемный звук
 	Taunt6 = { Id = "", Volume = 1, Start = 0, Length = 3 }, -- свой мемный звук
+	Taunt7 = { Id = "", Volume = 1, Start = 0, Length = 2 }, -- пук :) найди в Toolbox «fart»
+	Banana = { Id = "rbxasset://sounds/swordlunge.wav", Volume = 0.7, Speed = 0.6 }, -- водящий поскользнулся
+	Lion = { Id = "", Volume = 1 }, -- рык льва
+	Siuu = { Id = "", Volume = 1, Start = 0, Length = 3 }, -- крик «сиииу» (любой похожий звук)
 }
-Config.TAUNT_COUNT = 6
+Config.TAUNT_COUNT = 7
 Config.TAUNT_COOLDOWN = 20
 
 -- Картинки для красоты (загрузи в Creator Hub -> Decals и впиши номер; 0 — не используется).
@@ -192,6 +198,21 @@ Config.KITS = {
 	{ Id = "Argentina", Name = "Аргентина", Price = 200, Shirt = Color3.fromRGB(117, 170, 219), Shorts = Color3.fromRGB(20, 20, 20) },
 }
 Config.DEFAULT_KIT = "Lions"
+
+-- Приколы
+Config.ADMIN_USER_IDS = {} -- кому ещё можно админ-панель (Даня из HERO_USER_ID — всегда)
+Config.ADMIN_IN_STUDIO = true -- в Roblox Studio админ-панель у всех, чтобы проверять
+Config.EVENTS_ENABLED = true -- случайные события в раунде
+Config.EVENT_INTERVAL_MIN = 60 -- раз в сколько секунд случается событие
+Config.EVENT_INTERVAL_MAX = 110
+Config.EVENT_TIME = 25 -- сколько длится событие (большие головы, великан)
+Config.BANANA_COOLDOWN = 25
+Config.BANANA_LIFETIME = 40
+Config.BANANA_FREEZE = 2
+Config.STUN_IMMUNITY = 3 -- после мяча или банана водящего нельзя оглушить ещё 3 секунды
+Config.LION_SPEED = 20
+Config.LION_RUN_TIME = 35 -- сколько лев бегает с Кубком
+Config.SECRET_REWARD = 50 -- монеты из сундука в секретной комнате (раз в день)
 
 -- Статуя сына на стадионе: впиши его номер в Roblox (UserId), и статуя будет в виде его аватара.
 -- Номер видно в адресе страницы профиля: roblox.com/users/<НОМЕР>/profile

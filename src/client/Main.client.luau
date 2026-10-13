@@ -89,14 +89,87 @@ local statusLabel = label(gui, "", UDim2.new(0.7, 0, 0, 40), UDim2.new(0.15, 0, 
 
 -- Кнопки суперспособностей
 local abilities = Instance.new("Frame")
-abilities.Size = UDim2.fromOffset(170, 270)
-abilities.Position = UDim2.new(1, -180, 1, -390)
+abilities.Size = UDim2.fromOffset(350, 200)
+abilities.Position = UDim2.new(1, -360, 1, -320)
 abilities.BackgroundTransparency = 1
 abilities.Parent = gui
-local dashButton = button(abilities, "Рывок (Q)", UDim2.new(1, 0, 0, 58), UDim2.fromOffset(0, 0), Color3.fromRGB(30, 120, 220))
-local kickButton = button(abilities, "Мяч (F)", UDim2.new(1, 0, 0, 58), UDim2.fromOffset(0, 70), GREEN)
-local transformButton = button(abilities, "Предмет (E)", UDim2.new(1, 0, 0, 58), UDim2.fromOffset(0, 140), Color3.fromRGB(230, 120, 20))
-local tauntButton = button(abilities, "Дразнилка (T)", UDim2.new(1, 0, 0, 58), UDim2.fromOffset(0, 210), Color3.fromRGB(200, 50, 160))
+-- Две колонки кнопок, чтобы влезало и на телефоне
+local dashButton = button(abilities, "Рывок (Q)", UDim2.fromOffset(170, 58), UDim2.fromOffset(180, 0), Color3.fromRGB(30, 120, 220))
+local kickButton = button(abilities, "Мяч (F)", UDim2.fromOffset(170, 58), UDim2.fromOffset(180, 70), GREEN)
+local transformButton = button(abilities, "Предмет (E)", UDim2.fromOffset(170, 58), UDim2.fromOffset(180, 140), Color3.fromRGB(230, 120, 20))
+local tauntButton = button(abilities, "Дразнилка (T)", UDim2.fromOffset(170, 58), UDim2.fromOffset(0, 70), Color3.fromRGB(200, 50, 160))
+local bananaButton = button(abilities, "Банан (B)", UDim2.fromOffset(170, 58), UDim2.fromOffset(0, 140), Color3.fromRGB(210, 170, 0))
+
+-- Комментатор: смешные реплики внизу слева
+local commentLabel = label(gui, "", UDim2.new(0.45, 0, 0, 34), UDim2.new(0, 14, 1, -54))
+commentLabel.TextXAlignment = Enum.TextXAlignment.Left
+commentLabel.TextColor3 = Color3.fromRGB(255, 240, 200)
+commentLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+commentLabel.BackgroundTransparency = 1
+local commentTween: Tween? = nil
+Remotes.get("Comment").OnClientEvent:Connect(function(text: string)
+	if commentTween then
+		commentTween:Cancel()
+	end
+	commentLabel.Text = "🎙 " .. text
+	commentLabel.TextTransparency = 0
+	commentLabel.TextStrokeTransparency = 0.3
+	commentTween = TweenService:Create(
+		commentLabel,
+		TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 5),
+		{ TextTransparency = 1, TextStrokeTransparency = 1 }
+	)
+	commentTween:Play()
+end)
+
+-- Админ-панель Дани
+local adminButton = button(gui, "👑 Админ", UDim2.fromOffset(120, 44), UDim2.new(1, -132, 0, 90), Color3.fromRGB(150, 110, 0))
+adminButton.Visible = false
+local adminPanel = Instance.new("Frame")
+adminPanel.Size = UDim2.fromOffset(300, 330)
+adminPanel.Position = UDim2.new(1, -312, 0, 140)
+adminPanel.BackgroundColor3 = DARK
+adminPanel.Visible = false
+adminPanel.ZIndex = 5
+adminPanel.Parent = gui
+corner(adminPanel, 14)
+local adminGrid = Instance.new("UIGridLayout")
+adminGrid.CellSize = UDim2.fromOffset(136, 46)
+adminGrid.CellPadding = UDim2.fromOffset(8, 8)
+adminGrid.Parent = adminPanel
+local adminPad = Instance.new("UIPadding")
+adminPad.PaddingLeft = UDim.new(0, 10)
+adminPad.PaddingTop = UDim.new(0, 10)
+adminPad.Parent = adminPanel
+for _, item in
+	{
+		{ "tiny", "🐜 Всех маленькими" },
+		{ "bighead", "🎈 Большие головы" },
+		{ "disco", "🪩 Дискотека" },
+		{ "statues", "🗿 Оживить статуи" },
+		{ "moon", "🚀 Полёт (Луна)" },
+		{ "fireworks", "🎆 Салют" },
+		{ "ballrain", "⚽ Дождь из мячей" },
+		{ "giantball", "🔴 Огромный мяч" },
+		{ "lion", "🦁 Выпустить льва" },
+		{ "giant", "🧌 Водящий-великан" },
+	}
+do
+	local b = button(adminPanel, item[2], UDim2.fromOffset(136, 46), UDim2.new(), Color3.fromRGB(70, 60, 110))
+	b.ZIndex = 6
+	b.Activated:Connect(function()
+		Remotes.get("Admin"):FireServer(item[1])
+	end)
+end
+adminButton.Activated:Connect(function()
+	adminPanel.Visible = not adminPanel.Visible
+end)
+
+-- «Луна» из админ-панели: только у Дани слабая гравитация, прыгает как в космосе
+local NORMAL_GRAVITY = Workspace.Gravity
+player:GetAttributeChangedSignal("MoonMode"):Connect(function()
+	Workspace.Gravity = if player:GetAttribute("MoonMode") then 25 else NORMAL_GRAVITY
+end)
 
 -- Сердцебиение: края экрана краснеют, когда водящий рядом
 local heartFrame = Instance.new("Frame")
@@ -255,7 +328,7 @@ local rulesText = label(
 		"• Если время кончится или поймают всех — побеждает водящий.",
 		"",
 		"Q — рывок     F — мяч в водящего",
-		"E — стать предметом     T — дразнилка",
+		"E — стать предметом     T — дразнилка     B — банан",
 	}, "\n"),
 	UDim2.new(1, -40, 0, 230),
 	UDim2.fromOffset(20, 66)
@@ -289,6 +362,10 @@ local function taunt()
 	Remotes.get("Taunt"):FireServer()
 end
 tauntButton.Activated:Connect(taunt)
+local function banana()
+	Remotes.get("Banana"):FireServer()
+end
+bananaButton.Activated:Connect(banana)
 kickButton.Activated:Connect(kick)
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then
@@ -302,6 +379,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		transform()
 	elseif input.KeyCode == Enum.KeyCode.T then
 		taunt()
+	elseif input.KeyCode == Enum.KeyCode.B then
+		banana()
 	end
 end)
 
@@ -534,6 +613,11 @@ RunService.RenderStepped:Connect(function(dt)
 		statusLabel.Text = ""
 	end
 
+	adminButton.Visible = player:GetAttribute("IsAdmin") == true
+	if not adminButton.Visible then
+		adminPanel.Visible = false
+	end
+
 	-- Музыка
 	local inRound = phase == "Hiding" or phase == "Seeking"
 	setLoop("LobbyMusic", not inRound and role == "Lobby")
@@ -601,6 +685,9 @@ RunService.RenderStepped:Connect(function(dt)
 		local tauntText, tauntReady = cooldownText("Дразнилка (T)", player:GetAttribute("TauntReadyAt") or 0, t)
 		tauntButton.Text = tauntText
 		tauntButton.BackgroundTransparency = if tauntReady and phase == "Seeking" then 0 else 0.5
+		local bananaText, bananaReady = cooldownText("Банан (B)", player:GetAttribute("BananaReadyAt") or 0, t)
+		bananaButton.Text = bananaText
+		bananaButton.BackgroundTransparency = if bananaReady and phase == "Seeking" then 0 else 0.5
 	end
 
 	local inLobby = role == "Lobby"

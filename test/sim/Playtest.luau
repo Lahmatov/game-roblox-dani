@@ -97,6 +97,9 @@ check(heroes[1] and heroes[1].Pedestal.SurfaceGui.Title.Text == Config.HERO_TITL
 check(GameState:GetAttribute("BotLevel") == "dumb", "по умолчанию боты глупые")
 local Remotes = RS:WaitForChild("Remotes")
 
+local function Participants()
+	return Mock.require(server.Participants, "server").all()
+end
 local function role(p)
 	return p:GetAttribute("Role")
 end
@@ -371,6 +374,8 @@ check(Mock.advanceUntil(function()
 	return phase() == "Seeking"
 end, 80), "раунд 2 начался")
 check(role(cid) == "Seeker", "водит Cid (новый желающий)")
+check(cid.Character.Head:FindFirstChild("Crown") ~= nil, "Cid забил гол в прошлом раунде — теперь он в короне")
+check(announced("СИИИУ!"), "после гола было празднование «СИИИУ!»")
 local victims = { ana, bo, dani }
 for i, p in victims do
 	teleport(p, V(-80 + i * 40, 0, -40))
@@ -807,6 +812,179 @@ check(song.IsPlaying, "через 6 секунд ещё играет")
 Mock.advance(2.5)
 check(not song.IsPlaying, "через 8 секунд нарезка закончилась")
 Mock.removePlayer(listener)
+
+section("Приколы")
+fire("BotLevel", nil, "dumb")
+local mira = Mock.addPlayer("Mira")
+Mock.spawnCharacter(mira)
+Mock.localPlayer = mira
+Players.LocalPlayer = mira
+Mock.runScript(playerScripts.Main, "client")
+Mock.advance(1)
+check(mira:GetAttribute("IsAdmin") == true, "в Studio админ-панель есть (в игре — только у Дани)")
+local adminButton = findGui(mira, function(d)
+	return d.ClassName == "TextButton" and d.Text == "👑 Админ"
+end)
+check(adminButton and adminButton.Visible, "на экране кнопка «👑 Админ»")
+local Fun = Mock.require(server.Fun, "server")
+local ParticipantsModule = Mock.require(server.Participants, "server")
+local AbilitiesModule = Mock.require(server.Abilities, "server")
+check(Mock.advanceUntil(function()
+	return phase() == "Seeking"
+end, 90), "раунд с приколами начался")
+
+local function anyBotHead()
+	for _, b in ParticipantsModule.bots() do
+		if b.Character and b.Character:FindFirstChild("Head") then
+			return b.Character.Head
+		end
+	end
+	return nil
+end
+local head = anyBotHead()
+local normalSize = head.Size.X
+fire("Admin", mira, "bighead")
+Mock.advance(0.3)
+check(head.Size.X > normalSize * 2, "админ: у всех огромные головы")
+Mock.advance(Config.EVENT_TIME + 1)
+check(math.abs(head.Size.X - normalSize) < 0.01, "через 25 секунд головы обычные")
+
+fire("Admin", mira, "tiny")
+Mock.advance(0.3)
+local anyBot = ParticipantsModule.bots()[1]
+check(anyBot.Character:GetAttribute("Scale") == nil and Mock.data[anyBot.Character].props.Scale == 0.5, "админ: все стали маленькими")
+
+fire("Admin", mira, "moon")
+Mock.advance(0.3)
+check(mira:GetAttribute("MoonMode") == true and Mock.workspace.Gravity == 25, "админ: у Миры лунная гравитация — прыгает как в космосе")
+
+local lightsBefore = {}
+for _, d in stadium:GetDescendants() do
+	if d.ClassName == "SpotLight" then
+		lightsBefore[d] = d.Color
+	end
+end
+fire("Admin", mira, "disco")
+Mock.advance(1)
+local changed = 0
+for light, color in lightsBefore do
+	if light.Color ~= color then
+		changed += 1
+	end
+end
+check(changed > 10, "админ: дискотека — прожекторы меняют цвет (" .. changed .. ")")
+Mock.advance(21)
+local restored = true
+for light, color in lightsBefore do
+	if light.Color ~= color then
+		restored = false
+	end
+end
+check(restored, "после дискотеки свет снова обычный")
+
+fire("Admin", mira, "ballrain")
+Mock.advance(0.3)
+local balls = 0
+for _, d in Mock.workspace:GetChildren() do
+	if d.ClassName == "Part" and d.Shape and d.Shape.Name == "Ball" and d.Size.X == 2 then
+		balls += 1
+	end
+end
+check(balls >= 30, "админ: с неба падают мячи (" .. balls .. ")")
+
+fire("Admin", mira, "giantball")
+Mock.advance(0.3)
+local giant = Mock.workspace:FindFirstChild("GiantBall")
+check(giant ~= nil, "админ: по полю катится огромный мяч")
+local giantStart = giant and giant.Position
+Mock.advance(1)
+check(giant and giant.Parent and (giant.Position - giantStart).Magnitude > 20, "огромный мяч катится")
+
+fire("Admin", mira, "statues")
+Mock.advance(0.5)
+local awake = 0
+for _, st in stadium.Statues:GetChildren() do
+	if st:IsA("Model") and not st.HumanoidRootPart.Anchored then
+		awake += 1
+	end
+end
+check(awake == 8, "админ: ожили сразу все 8 статуй")
+
+local emittedBefore = Mock.emitted
+fire("Admin", mira, "fireworks")
+Mock.advance(0.2)
+check(Mock.emitted > emittedBefore, "админ: салют")
+
+fire("Admin", bo, "disco")
+Mock.advance(0.2)
+check(#Mock.errors == 0, "команды админа без ошибок")
+
+-- Лев утаскивает Кубок
+local since = Mock.time()
+fire("Admin", mira, "lion")
+Mock.advance(0.3)
+local lionModel = Mock.workspace:FindFirstChild("Lion")
+check(lionModel ~= nil, "админ: на поле выбежал лев")
+check(Mock.advanceUntil(function()
+	return announced("Лев утащил Кубок", since) or phase() ~= "Seeking"
+end, 40), "лев добежал до Кубка и утащил его")
+
+-- Банан
+local seekerP
+for _, p in Participants() do
+	if role(p) == "Seeker" then
+		seekerP = p
+	end
+end
+local hiderBot
+Mock.advanceUntil(function()
+	for _, bot in ParticipantsModule.bots() do
+		if role(bot) == "Hider" and not bot:GetAttribute("Frozen") then
+			hiderBot = bot
+			return true
+		end
+	end
+	return false
+end, 10)
+if phase() == "Seeking" and seekerP and hiderBot then
+	local since2 = Mock.time()
+	hiderBot:SetAttribute("BananaReadyAt", 0)
+	local okBanana = AbilitiesModule.tryBanana(hiderBot)
+	local bananaModel = Mock.workspace:FindFirstChild("Banana")
+	check(okBanana and bananaModel ~= nil, "прячущийся бросил банановую кожуру")
+	local bananaPos = if bananaModel then bananaModel:GetPivot().Position else pos(hiderBot)
+	seekerP.Character:PivotTo(Mock.CFrame.new(bananaPos + V(0, 3, 0)))
+	check(Mock.advanceUntil(function()
+		return announced("поскользнулся", since2)
+	end, 2), "водящий наступил на банан и поскользнулся")
+	Mock.advance(0.2)
+	check(seekerP:GetAttribute("Frozen") == true, "поскользнувшийся водящий замер")
+else
+	check(false, "раунд закончился раньше проверки банана")
+end
+
+check(Mock.comments and #Mock.comments > 10, "комментатор шутит (" .. tostring(Mock.comments and #Mock.comments) .. " реплик)")
+if Mock.comments then
+	for i = 1, math.min(4, #Mock.comments) do
+		print("  🎙 " .. Mock.comments[i])
+	end
+end
+
+-- Секретная комната
+local hatch = stadium.SecretRoom.Hatch
+hatch.ProximityPrompt.Triggered:Fire(mira)
+Mock.advance(0.3)
+check(pos(mira).Y < -70, "Мира залезла в люк и попала в секретную комнату")
+local coins = mira:GetAttribute("Coins")
+stadium.SecretRoom.Chest.ProximityPrompt.Triggered:Fire(mira)
+Mock.advance(0.3)
+check(mira:GetAttribute("Coins") == coins + Config.SECRET_REWARD, "секретный сундук: +" .. Config.SECRET_REWARD .. " монет")
+stadium.SecretRoom.Chest.ProximityPrompt.Triggered:Fire(mira)
+Mock.advance(0.3)
+check(mira:GetAttribute("Coins") == coins + Config.SECRET_REWARD, "второй раз за день сундук пустой")
+stadium.SecretRoom.Exit.ProximityPrompt.Triggered:Fire(mira)
+Mock.advance(0.3)
+check(pos(mira).Y > 0, "Мира вышла обратно на стадион")
 
 section("Итог")
 for _, e in Mock.errors do

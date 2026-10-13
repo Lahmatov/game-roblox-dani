@@ -14,6 +14,8 @@ local Participants = require(script.Parent.Participants)
 local Bots = require(script.Parent.Bots)
 local Transform = require(script.Parent.Transform)
 local Sfx = require(script.Parent.Sfx)
+local Fun = require(script.Parent.Fun)
+local Commentator = require(script.Parent.Commentator)
 
 local RoundManager = {}
 
@@ -184,6 +186,7 @@ local function jail(player: Player)
 		announce(player.DisplayName .. " уронил Кубок!", GOLD)
 	end
 	Sfx.play("Catch", PlayerState.getPosition(player))
+	Commentator.say("catch", player.DisplayName)
 	Transform.revert(player)
 	PlayerState.setRole(player, "Jailed")
 	PlayerState.teleport(player, jailCFrame())
@@ -200,6 +203,7 @@ local function release(rescuer: Player, prisoner: Player)
 	PlayerState.teleport(prisoner, hiderSpawnCFrame())
 	Economy.addCoins(rescuer, Config.COINS.RESCUE)
 	Sfx.play("Rescue", PlayerState.getPosition(rescuer))
+	Commentator.say("rescue", rescuer.DisplayName, prisoner.DisplayName)
 	announce(rescuer.DisplayName .. " освободил " .. prisoner.DisplayName .. "!", HIDER_GREEN)
 	updateCounters()
 end
@@ -305,6 +309,7 @@ local function tick(): (string?, string?, Player?)
 		Transform.revert(picked) -- с Кубком над головой предметом не притворишься
 		Sfx.play("Trophy")
 		Sfx.play("TrophySong")
+		Commentator.say("trophy", picked.DisplayName)
 		announce(picked.DisplayName .. " нашёл Кубок мира! Беги к воротам!", GOLD)
 	end
 	local carrier = Trophy.getCarrier()
@@ -312,6 +317,8 @@ local function tick(): (string?, string?, Player?)
 		local position = PlayerState.getPosition(carrier)
 		if position and inGoal(position) then
 			celebrateGoal(position)
+			Fun.siuu(carrier)
+			Commentator.say("goal", carrier.DisplayName)
 			return "Hiders", "ГООООЛ! " .. carrier.DisplayName .. " забил Кубок в ворота! Прячущиеся победили!", carrier
 		end
 	end
@@ -351,6 +358,8 @@ local function endRound(winner: string?, reason: string, hero: Player?)
 	setPhase("End", Config.END_TIME)
 	Statues.disable()
 	Transform.revertAll()
+	Fun.stopRoundEvents()
+	Fun.removeCrown()
 	seekerModel.Value = nil
 	announce(reason, if winner == "Seeker" then SEEKER_RED else HIDER_GREEN)
 	if winner == "Hiders" then
@@ -377,6 +386,14 @@ local function endRound(winner: string?, reason: string, hero: Player?)
 		Economy.addCoins(hero, Config.COINS.GOAL)
 	end
 	gameState:SetAttribute("LastWinner", winner or "")
+	-- Лучший игрок: кто забил гол, или водящий, если он победил
+	if winner == "Hiders" and hero and hero.Parent then
+		Fun.setMvp(hero)
+	elseif winner == "Seeker" and seeker and seeker.Parent then
+		Fun.setMvp(seeker)
+	else
+		Fun.setMvp(nil)
+	end
 	updateCounters()
 
 	task.wait(Config.END_TIME)
@@ -432,6 +449,7 @@ local function runRound()
 	for _, player in players do
 		placeByRole(player)
 	end
+	Fun.applyMvp()
 	announce(currentSeeker.DisplayName .. " водит! Прячьтесь!", HIDER_GREEN)
 
 	local finished = waitPhase(Config.HIDE_TIME, "Hiding", function()
@@ -456,6 +474,7 @@ local function runRound()
 	Trophy.spawn(map.TrophySpots)
 	Statues.enable()
 	Sfx.play("Whistle")
+	Fun.startRoundEvents()
 	announce("Водящий вышел искать! Найдите Кубок мира и забейте его в ворота!", GOLD)
 
 	local lastCounters = 0
@@ -507,6 +526,10 @@ function RoundManager.toggleTransform(participant): boolean
 	local changed = Transform.toggle(participant, can)
 	if changed then
 		Sfx.play("Transform", PlayerState.getPosition(participant))
+		local prop = participant:GetAttribute("Prop")
+		if prop then
+			Commentator.say("transform", participant.DisplayName, string.lower(prop))
+		end
 	end
 	return changed
 end
@@ -523,6 +546,7 @@ function RoundManager.start(builtMap)
 	announceRemote = Remotes.get("Announce")
 
 	Trophy.init(gameState)
+	Fun.init(map, gameState, announce)
 	Statues.build(map.Root, map.StatueHomes, map.StatueColor, announce)
 	Abilities.start(gameState, announce, function(participant)
 		Economy.addCoins(participant, Config.COINS.TAUNT)

@@ -82,6 +82,9 @@ local function load(player: Player)
 					end
 				end
 			end
+			if type(data.SecretDay) == "string" then
+				(profile :: any).SecretDay = data.SecretDay
+			end
 			if type(data.Equipped) == "string" and profile.Owned[data.Equipped] then
 				profile.Equipped = data.Equipped
 			end
@@ -139,6 +142,22 @@ function Economy.applyKit(player: Player)
 		colors.LeftLegColor3 = kit.Shorts
 		colors.RightLegColor3 = kit.Shorts
 	end
+end
+
+-- Сундук в секретной комнате: награда раз в день. Возвращает true, если дали монеты.
+function Economy.claimSecret(player: Player): boolean
+	local profile = profiles[player]
+	if not profile then
+		return false
+	end
+	local today = os.date("!%Y-%m-%d")
+	if (profile :: any).SecretDay == today then
+		return false
+	end
+	(profile :: any).SecretDay = today
+	profile.Coins += Config.SECRET_REWARD
+	publish(player)
+	return true
 end
 
 function Economy.addCoins(player: Player, amount: number)

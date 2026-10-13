@@ -11,6 +11,8 @@ local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local PlayerState = require(script.Parent.PlayerState)
 local Participants = require(script.Parent.Participants)
 local Sfx = require(script.Parent.Sfx)
+local Commentator = require(script.Parent.Commentator)
+local Effects = require(script.Parent.Effects)
 
 local Abilities = {}
 
@@ -74,8 +76,10 @@ local function kickBall(player: Player, direction: Vector3)
 		if seeker and seekerPosition and (seekerPosition - ball.Position).Magnitude < 4 then
 			connection:Disconnect()
 			ball:Destroy()
-			PlayerState.freeze(seeker, Config.KICK_FREEZE)
-			announce(player.DisplayName .. " попал мячом в водящего!", Color3.fromRGB(0, 220, 120))
+			if PlayerState.stun(seeker, Config.KICK_FREEZE) then
+				announce(player.DisplayName .. " попал мячом в водящего!", Color3.fromRGB(0, 220, 120))
+				Commentator.say("kick", player.DisplayName)
+			end
 		end
 	end)
 end
@@ -87,6 +91,10 @@ function Abilities.start(state: Folder, announceFn: (string, Color3?) -> (), tau
 
 	Remotes.get("Taunt").OnServerEvent:Connect(function(player)
 		Abilities.tryTaunt(player)
+	end)
+
+	Remotes.get("Banana").OnServerEvent:Connect(function(player)
+		Abilities.tryBanana(player)
 	end)
 
 	Remotes.get("Dash").OnServerEvent:Connect(function(player)
@@ -132,10 +140,84 @@ function Abilities.tryTaunt(player): boolean
 		return false
 	end
 	player:SetAttribute("TauntReadyAt", t + Config.TAUNT_COOLDOWN)
-	Sfx.play("Taunt" .. math.random(1, Config.TAUNT_COUNT), PlayerState.getPosition(player))
+	-- Только те дразнилки, для которых есть звук
+	local taunts = {}
+	for i = 1, Config.TAUNT_COUNT do
+		local info = Config.SOUNDS["Taunt" .. i]
+		if info and info.Id ~= "" then
+			table.insert(taunts, "Taunt" .. i)
+		end
+	end
+	if #taunts > 0 then
+		Sfx.play(taunts[math.random(1, #taunts)], PlayerState.getPosition(player))
+	end
 	if onTaunt then
 		onTaunt(player)
 	end
+	return true
+end
+
+-- Банановая кожура: водящий наступит — поскользнётся
+local function dropBanana(player, position: Vector3)
+	local banana = Instance.new("Model")
+	banana.Name = "Banana"
+	local yellow = Color3.fromRGB(250, 215, 40)
+	local parts = {}
+	for k = -1, 1 do
+		local p = Instance.new("Part")
+		p.Size = Vector3.new(0.5, 0.25, 1.6)
+		p.Color = yellow
+		p.Material = Enum.Material.SmoothPlastic
+		p.Anchored = true
+		p.CanCollide = false
+		p.CFrame = CFrame.new(position + Vector3.new(0, 0.15, 0)) * CFrame.Angles(0, math.rad(k * 55), 0) * CFrame.new(0, 0, 0.6)
+		p.Parent = banana
+		table.insert(parts, p)
+	end
+	local tip = Instance.new("Part")
+	tip.Size = Vector3.new(0.35, 0.35, 0.35)
+	tip.Color = Color3.fromRGB(90, 60, 30)
+	tip.Anchored = true
+	tip.CanCollide = false
+	tip.Position = position + Vector3.new(0, 0.25, 0)
+	tip.Parent = banana
+	banana.Parent = Workspace
+	Debris:AddItem(banana, Config.BANANA_LIFETIME)
+
+	local connection
+	connection = RunService.Heartbeat:Connect(function()
+		if not banana.Parent then
+			connection:Disconnect()
+			return
+		end
+		local seeker = findSeeker()
+		local seekerPosition = seeker and PlayerState.getPosition(seeker)
+		if seeker and seekerPosition and (Vector3.new(seekerPosition.X, position.Y, seekerPosition.Z) - position).Magnitude < 3 then
+			if not PlayerState.stun(seeker, Config.BANANA_FREEZE) then
+				return -- водящий только что был оглушён — банан пока лежит
+			end
+			connection:Disconnect()
+			banana:Destroy()
+			Effects.spin(seeker, 1.2, 30)
+			Effects.billboard(seeker, "БАНАН!", Color3.fromRGB(250, 215, 40), 2)
+			Sfx.play("Banana", seekerPosition)
+			announce("Водящий поскользнулся на банане от " .. player.DisplayName .. "!", Color3.fromRGB(250, 215, 40))
+			Commentator.say("slip", player.DisplayName)
+		end
+	end)
+end
+
+function Abilities.tryBanana(player): boolean
+	local t = PlayerState.now()
+	if not canUse(player) or phase() ~= "Seeking" or (player:GetAttribute("BananaReadyAt") or 0) > t then
+		return false
+	end
+	local position = PlayerState.getPosition(player)
+	if not position then
+		return false
+	end
+	player:SetAttribute("BananaReadyAt", t + Config.BANANA_COOLDOWN)
+	dropBanana(player, position - Vector3.new(0, 3, 0))
 	return true
 end
 
@@ -143,6 +225,7 @@ function Abilities.resetCooldowns(player: Player)
 	player:SetAttribute("DashReadyAt", 0)
 	player:SetAttribute("KickReadyAt", 0)
 	player:SetAttribute("TauntReadyAt", 0)
+	player:SetAttribute("BananaReadyAt", 0)
 end
 
 return Abilities

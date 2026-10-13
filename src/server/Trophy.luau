@@ -18,6 +18,9 @@ local pickupBlockedUntil = 0
 local hintThread: thread? = nil
 local gameState: Folder
 
+-- Кубок держит не игрок, а кто-то другой (лев-талисман)
+local heldBy: BasePart? = nil
+
 local function setCarrier(player: Player?)
 	carrier = player
 	gameState:SetAttribute("TrophyCarrier", if player then player.Name else "")
@@ -178,7 +181,7 @@ function Trophy.remove()
 	if model then
 		model:Destroy()
 	end
-	model, base, carryWeld = nil, nil, nil
+	model, base, carryWeld, heldBy = nil, nil, nil, nil
 	setCarrier(nil)
 end
 
@@ -187,8 +190,42 @@ function Trophy.getCarrier(): Player?
 end
 
 -- Где лежит Кубок (nil, если его нет или его несут)
+function Trophy.isHeldByOther(): boolean
+	return heldBy ~= nil
+end
+
+-- Лев хватает Кубок: Кубок приклеивается к его детали
+function Trophy.attachTo(holder: BasePart): boolean
+	if not base or not model or carrier or heldBy then
+		return false
+	end
+	base.Anchored = false
+	model:PivotTo(holder.CFrame * CFrame.new(0, 2.5, -1) * CFrame.Angles(0, 0, math.rad(90)))
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = holder
+	weld.Part1 = base
+	weld.Parent = base
+	carryWeld = weld
+	heldBy = holder
+	return true
+end
+
+-- Лев уронил Кубок
+function Trophy.detach(position: Vector3)
+	if not heldBy then
+		return
+	end
+	heldBy = nil
+	if carryWeld then
+		carryWeld:Destroy()
+		carryWeld = nil
+	end
+	placeAt(groundBelow(position + Vector3.new(0, 2, 0)))
+	pickupBlockedUntil = PlayerState.now() + 1
+end
+
 function Trophy.getGroundPosition(): Vector3?
-	if base and not carrier then
+	if base and not carrier and not heldBy then
 		return base.Position
 	end
 	return nil
@@ -226,7 +263,7 @@ end
 
 -- Кто-то из прячущихся рядом? Подбираем.
 function Trophy.update(hiders: { Player })
-	if not base or carrier or PlayerState.now() < pickupBlockedUntil then
+	if not base or carrier or heldBy or PlayerState.now() < pickupBlockedUntil then
 		return nil
 	end
 	for _, player in hiders do

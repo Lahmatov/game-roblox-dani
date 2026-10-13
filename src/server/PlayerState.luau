@@ -15,6 +15,7 @@ type Status = {
 	dashUntil: number,
 	boostUntil: number,
 	safeUntil: number,
+	stunImmuneUntil: number,
 }
 
 local statuses: { [Player]: Status } = {}
@@ -26,7 +27,7 @@ end
 local function status(player: Player): Status
 	local s = statuses[player]
 	if not s then
-		s = { frozenUntil = 0, dashUntil = 0, boostUntil = 0, safeUntil = 0 }
+		s = { frozenUntil = 0, dashUntil = 0, boostUntil = 0, safeUntil = 0, stunImmuneUntil = 0 }
 		statuses[player] = s
 	end
 	return s
@@ -82,6 +83,19 @@ end
 function PlayerState.freeze(player: Player, seconds: number)
 	local s = status(player)
 	s.frozenUntil = math.max(s.frozenUntil, now() + seconds)
+end
+
+-- Оглушить (мяч, банан). После оглушения — несколько секунд защиты, чтобы водящего
+-- нельзя было закидать бананами без остановки. Возвращает true, если оглушило.
+function PlayerState.stun(player: Player, seconds: number): boolean
+	local s = status(player)
+	local t = now()
+	if s.stunImmuneUntil > t then
+		return false
+	end
+	s.frozenUntil = math.max(s.frozenUntil, t + seconds)
+	s.stunImmuneUntil = s.frozenUntil + Config.STUN_IMMUNITY
+	return true
 end
 
 function PlayerState.isFrozen(player: Player): boolean

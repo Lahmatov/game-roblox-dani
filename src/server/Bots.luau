@@ -459,6 +459,9 @@ local function thinkHider(brain: Brain, position: Vector3)
 		if seekerDistance < 14 and math.random() < level.DashChance then
 			Abilities.tryDash(bot)
 		end
+		if math.random() < level.BananaChance then
+			Abilities.tryBanana(bot)
+		end
 		local away = flat(position - seekerPosition)
 		if away.Magnitude < 0.1 then
 			away = Vector3.new(1, 0, 0)

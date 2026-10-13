@@ -344,7 +344,7 @@ local function buildRulesBoard(root: Instance, o)
 		"Прячься, пока водящий заперт.",
 		"Найди Кубок мира и забей в ворота!",
 		"Друзей из тюрьмы освобождай касанием.",
-		"Q рывок · F мяч · E предмет · T дразнилка",
+		"Q рывок · F мяч · E предмет · T дразнилка · B банан",
 	}, "\n")
 	label.Parent = gui
 	local pad = Instance.new("UIPadding")
