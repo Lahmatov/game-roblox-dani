@@ -820,6 +820,17 @@ function methods.CreateHumanoidModelFromDescription(_self, _description, _rigTyp
 	character.PrimaryPart = root
 	return character
 end
+function methods.GetHumanoidDescriptionFromUserId(_self, userId)
+	local d = Instance.new("HumanoidDescription")
+	d.UserId = userId
+	return d
+end
+function methods.ScaleTo(self, scale)
+	data[self].props.Scale = scale
+end
+function methods.GetBoundingBox(self)
+	return self:GetPivot(), v3(4, 5, 2)
+end
 function methods.LoadAnimation(_self, _animation)
 	local track = { IsPlaying = false }
 	function track.Play(t)

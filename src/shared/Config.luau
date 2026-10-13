@@ -9,15 +9,58 @@ Config.MAX_HIDERS = 22 -- больше прячущихся не бывает (�
 -- Боты: добавляются, если настоящих игроков мало. Включаются кнопкой в лобби.
 Config.BOTS_ENABLED = true -- включены ли боты, когда сервер запускается
 Config.BOT_FILL_TO = 10 -- сколько всего участников в раунде вместе с ботами
-Config.BOT_HIDER_SPEED_BONUS = -2 -- боты-прячущиеся чуть медленнее людей, чтобы их можно было догнать
-Config.BOT_SEEKER_SPEED_BONUS = 0
-Config.BOT_KICK_CHANCE = 0.08 -- как часто бот пробует пнуть мяч, когда водящий рядом
-Config.BOT_SIGHT = 70 -- как далеко бот-водящий замечает прячущихся
-Config.BOT_FLEE_DISTANCE = 28 -- на каком расстоянии бот убегает от водящего
-Config.BOT_SEARCH_DELAY_MIN = 45 -- через сколько секунд поисков боты начинают искать Кубок
-Config.BOT_SEARCH_DELAY_MAX = 150
-Config.BOT_TROPHY_SIGHT = 15 -- как близко бот должен быть, чтобы заметить Кубок
-Config.BOT_NOTICE_DELAY = 20 -- первые секунды поисков боты Кубок не замечают
+
+-- Насколько боты умные. Переключается кнопкой в лобби.
+--   dumb   — максимально глупые: путаются, стоят на виду, болтают, отвлекаются
+--   normal — обычные: прячутся, убегают, ищут Кубок
+Config.BOT_LEVEL = "dumb"
+Config.BOT_LEVELS = {
+	dumb = {
+		Name = "Глупые",
+		HiderSpeedBonus = -4, -- боты-прячущиеся медленнее людей
+		SeekerSpeedBonus = -4, -- бот-водящий медленнее людей
+		ThinkInterval = 0.8, -- как часто бот думает (секунды) — глупые думают медленно
+		Sight = 30, -- как далеко бот-водящий замечает прячущихся
+		GiveUpChase = 5, -- через сколько секунд погони бот-водящий сдаётся
+		FleeDistance = 18, -- на каком расстоянии бот замечает водящего
+		FleeChance = 0.4, -- шанс, что бот вообще догадается убежать
+		WrongWayChance = 0.4, -- шанс убежать не туда (прямо к водящему)
+		DashChance = 0.15,
+		KickChance = 0.03, -- и пинает мяч куда попало
+		OpenHideChance = 0.5, -- шанс «спрятаться» прямо посреди поля
+		DistractChance = 0.06, -- шанс отвлечься и пойти куда-то не туда
+		TalkChance = 0.04, -- шанс сказать глупость
+		SearchDelayMin = 90, -- когда начинают искать Кубок
+		SearchDelayMax = 240,
+		TrophySight = 8, -- замечают Кубок, только если почти наступили на него
+		NoticeDelay = 30,
+	},
+	normal = {
+		Name = "Умные",
+		HiderSpeedBonus = -2,
+		SeekerSpeedBonus = 0,
+		ThinkInterval = 0.25,
+		Sight = 70,
+		GiveUpChase = 30,
+		FleeDistance = 28,
+		FleeChance = 1,
+		WrongWayChance = 0,
+		DashChance = 1,
+		KickChance = 0.08,
+		OpenHideChance = 0,
+		DistractChance = 0,
+		TalkChance = 0.01,
+		SearchDelayMin = 45,
+		SearchDelayMax = 150,
+		TrophySight = 15,
+		NoticeDelay = 20,
+	},
+}
+
+function Config.bot()
+	return Config.BOT_LEVELS[Config.BOT_LEVEL] or Config.BOT_LEVELS.dumb
+end
+
 Config.TROPHY_MIN_DISTANCE = 35 -- Кубок прячется не ближе этого к любому игроку
 
 -- Время (в секундах)
@@ -88,6 +131,11 @@ Config.KITS = {
 	{ Id = "Argentina", Name = "Аргентина", Price = 200, Shirt = Color3.fromRGB(117, 170, 219), Shorts = Color3.fromRGB(20, 20, 20) },
 }
 Config.DEFAULT_KIT = "Lions"
+
+-- Статуя сына на стадионе: впиши его номер в Roblox (UserId), и статуя будет в виде его аватара.
+-- Номер видно в адресе страницы профиля: roblox.com/users/<НОМЕР>/profile
+Config.HERO_USER_ID = 0
+Config.HERO_TITLE = "ДАНЯ — легенда стадиона"
 
 function Config.getKit(id: string)
 	for _, kit in Config.KITS do

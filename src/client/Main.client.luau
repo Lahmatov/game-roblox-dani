@@ -99,8 +99,9 @@ local kickButton = button(abilities, "Мяч (F)", UDim2.new(1, 0, 0, 58), UDim2
 -- Кнопка «Хочу водить»
 local volunteerButton = button(gui, "", UDim2.fromOffset(200, 54), UDim2.new(0, 12, 0.5, -60), RED)
 
--- Кнопка «Боты»
+-- Кнопки «Боты» и «Глупые / Умные»
 local botsButton = button(gui, "", UDim2.fromOffset(200, 54), UDim2.new(0, 12, 0.5, -124), Color3.fromRGB(40, 90, 170))
+local levelButton = button(gui, "", UDim2.fromOffset(200, 54), UDim2.new(0, 12, 0.5, -188), Color3.fromRGB(150, 80, 200))
 
 -- Магазин
 local shopButton = button(gui, "Магазин", UDim2.fromOffset(200, 54), UDim2.new(0, 12, 0.5, 4), Color3.fromRGB(200, 140, 0))
@@ -188,6 +189,11 @@ shopButton.Activated:Connect(function()
 end)
 closeButton.Activated:Connect(function()
 	shop.Visible = false
+end)
+
+levelButton.Activated:Connect(function()
+	local nextLevel = if gameState:GetAttribute("BotLevel") == "dumb" then "normal" else "dumb"
+	Remotes.get("BotLevel"):FireServer(nextLevel)
 end)
 
 botsButton.Activated:Connect(function()
@@ -326,6 +332,9 @@ RunService.RenderStepped:Connect(function(dt)
 	local inLobby = role == "Lobby"
 	volunteerButton.Visible = inLobby and phase ~= "Hiding" and phase ~= "Seeking"
 	botsButton.Visible = volunteerButton.Visible
+	levelButton.Visible = volunteerButton.Visible and botsOn
+	local level = Config.BOT_LEVELS[gameState:GetAttribute("BotLevel") or "dumb"]
+	levelButton.Text = "Боты: " .. (if level then level.Name else "?")
 	botsButton.Text = if botsOn then "Боты: ВКЛ" else "Боты: ВЫКЛ"
 	botsButton.BackgroundColor3 = if botsOn then Color3.fromRGB(40, 90, 170) else Color3.fromRGB(70, 70, 80)
 	if player:GetAttribute("Volunteer") then

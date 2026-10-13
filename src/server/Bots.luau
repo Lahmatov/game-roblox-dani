@@ -23,6 +23,15 @@ local SKIN = {
 	Color3.fromRGB(141, 85, 36),
 	Color3.fromRGB(245, 205, 48),
 }
+-- Что говорят глупые боты
+local PHRASES = {
+	idle = { "Я хорошо спрятался!", "Тут меня никто не найдёт", "Кубок? Какой кубок?", "Ой, я заблудился", "А где все?", "Хочу пиццу", "Мама, я на стадионе!", "Я невидимка!" },
+	scared = { "АААА!", "Ой-ой-ой!", "Меня не видно!", "Я просто статуя!", "Не трогай меня!" },
+	seeker = { "Кто здесь?", "Я всех найду!", "Где же вы?", "Ой, я устал", "Раз, два, три..." },
+	caught = { "Ну во-о-от...", "Это нечестно!", "Я же спрятался!", "Спасите!" },
+	distracted = { "О, бабочка!", "Смотрите, птичка!", "Я танцую!", "Какой красивый газон!", "Апчхи!" },
+	trophy = { "У МЕНЯ КУБОК!", "Ура-а-а!", "Куда бежать?!" },
+}
 local WALK_ANIMATION = "rbxassetid://507777826" -- стандартная анимация ходьбы R15
 local IDLE_ANIMATION = "rbxassetid://507766666" -- стандартная анимация стояния R15
 
@@ -42,6 +51,15 @@ type Brain = {
 	spot: Vector3?,
 	visited: { [any]: { [number]: boolean } },
 	searchDelay: number,
+	distractedUntil: number,
+	distractTarget: Vector3?,
+	fleeDecisionUntil: number,
+	willFlee: boolean,
+	fleeWrongWay: boolean,
+	chaseTarget: any,
+	chaseStartedAt: number,
+	ignore: { [any]: number },
+	lastRole: string?,
 	alive: boolean,
 }
 
@@ -246,6 +264,46 @@ local function go(brain: Brain, target: Vector3, recomputeEvery: number?)
 end
 
 ----------------------------------------------------------------------
+-- Болтовня
+----------------------------------------------------------------------
+
+local function say(bot, kind: string)
+	local character = bot.Character
+	local head = character and character:FindFirstChild("Head")
+	local list = PHRASES[kind]
+	if not head or not list then
+		return
+	end
+	local old = head:FindFirstChild("Speech")
+	if old then
+		old:Destroy()
+	end
+	local bubble = Instance.new("BillboardGui")
+	bubble.Name = "Speech"
+	bubble.Size = UDim2.fromOffset(180, 44)
+	bubble.StudsOffset = Vector3.new(0, 3.6, 0)
+	bubble.MaxDistance = 70
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundColor3 = Color3.new(1, 1, 1)
+	label.BackgroundTransparency = 0.1
+	label.TextColor3 = Color3.fromRGB(20, 20, 20)
+	label.TextScaled = true
+	label.Font = Enum.Font.SourceSansBold
+	label.Text = list[math.random(1, #list)]
+	label.Parent = bubble
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 12)
+	corner.Parent = label
+	bubble.Parent = head
+	task.delay(3, function()
+		if bubble.Parent then
+			bubble:Destroy()
+		end
+	end)
+end
+
+----------------------------------------------------------------------
 -- Что видит бот
 ----------------------------------------------------------------------
 
@@ -319,10 +377,42 @@ local function thinkJailed(brain: Brain, position: Vector3)
 	end
 end
 
+local function openFieldSpot(): Vector3
+	return Vector3.new(math.random(-90, 90), 0, math.random(-55, 55))
+end
+
+-- Глупый бот иногда отвлекается: идёт куда-то или пляшет на месте
+local function distracted(brain: Brain, position: Vector3): boolean
+	local level = Config.bot()
+	local now = os.clock()
+	if now < brain.distractedUntil then
+		local humanoid = humanoidOf(brain.bot)
+		if brain.distractTarget then
+			go(brain, brain.distractTarget)
+		elseif humanoid then
+			stop(brain)
+			humanoid.Jump = true -- танцует
+		end
+		return true
+	end
+	if math.random() < level.DistractChance then
+		brain.distractedUntil = now + math.random(2, 5)
+		brain.distractTarget = if math.random() < 0.5
+			then position + Vector3.new(math.random(-25, 25), 0, math.random(-25, 25))
+			else nil
+		say(brain.bot, "distracted")
+		return true
+	end
+	return false
+end
+
 local function thinkHider(brain: Brain, position: Vector3)
 	local bot = brain.bot
+	local level = Config.bot()
 	if phase() == "Hiding" then
-		brain.spot = brain.spot or randomSpot(brain, map.HideSpots)
+		if not brain.spot then
+			brain.spot = if math.random() < level.OpenHideChance then openFieldSpot() else randomSpot(brain, map.HideSpots)
+		end
 		go(brain, brain.spot :: Vector3)
 		return
 	end
@@ -333,24 +423,45 @@ local function thinkHider(brain: Brain, position: Vector3)
 
 	-- С Кубком — бежим к воротам!
 	if Trophy.getCarrier() == bot then
-		if seekerDistance < 15 then
+		if brain.target == nil or math.random() < level.TalkChance * 3 then
+			say(bot, "trophy")
+		end
+		if seekerDistance < 15 and math.random() < level.DashChance then
 			Abilities.tryDash(bot)
 		end
 		go(brain, goalTarget(position), 1.5)
 		return
 	end
 
-	-- Водящий рядом — убегаем
-	if seekerPosition and seekerDistance < Config.BOT_FLEE_DISTANCE and canSee(position, seekerPosition) then
-		if seekerDistance > 8 and math.random() < Config.BOT_KICK_CHANCE then
-			Abilities.tryKick(bot, seekerPosition - position)
+	if distracted(brain, position) then
+		return
+	end
+
+	-- Водящий рядом — убегаем (глупый бот может и не догадаться, или убежать не туда)
+	local now = os.clock()
+	if seekerPosition and seekerDistance < level.FleeDistance and canSee(position, seekerPosition) then
+		if now > brain.fleeDecisionUntil then
+			brain.fleeDecisionUntil = now + 3
+			brain.willFlee = math.random() < level.FleeChance
+			brain.fleeWrongWay = math.random() < level.WrongWayChance
+			say(bot, "scared")
 		end
-		if seekerDistance < 14 then
+	end
+	if seekerPosition and seekerDistance < level.FleeDistance and now < brain.fleeDecisionUntil and brain.willFlee then
+		if seekerDistance > 8 and math.random() < level.KickChance then
+			-- Глупые боты пинают мяч куда попало
+			local angle = math.rad(math.random(-90, 90)) * (1 - level.FleeChance)
+			Abilities.tryKick(bot, CFrame.Angles(0, angle, 0) * (seekerPosition - position))
+		end
+		if seekerDistance < 14 and math.random() < level.DashChance then
 			Abilities.tryDash(bot)
 		end
 		local away = flat(position - seekerPosition)
 		if away.Magnitude < 0.1 then
 			away = Vector3.new(1, 0, 0)
+		end
+		if brain.fleeWrongWay then
+			away = -away
 		end
 		local escape = position + away.Unit * 30
 		escape = Vector3.new(math.clamp(escape.X, -130, 130), 0, math.clamp(escape.Z, -80, 80))
@@ -363,8 +474,8 @@ local function thinkHider(brain: Brain, position: Vector3)
 	local trophyPosition = Trophy.getGroundPosition()
 	if
 		trophyPosition
-		and seekingElapsed() > Config.BOT_NOTICE_DELAY
-		and distance(position, trophyPosition) < Config.BOT_TROPHY_SIGHT
+		and seekingElapsed() > level.NoticeDelay
+		and distance(position, trophyPosition) < level.TrophySight
 		and canSee(position, trophyPosition + Vector3.new(0, 1, 0))
 	then
 		go(brain, trophyPosition, 1.5)
@@ -393,6 +504,9 @@ local function thinkHider(brain: Brain, position: Vector3)
 			go(brain, brain.spot :: Vector3)
 		else
 			stop(brain)
+			if math.random() < level.TalkChance then
+				say(bot, "idle")
+			end
 			-- Иногда посидевший бот тоже идёт искать
 			if brain.personality == "hider" and math.random() < 0.005 then
 				brain.personality = "searcher"
@@ -411,19 +525,29 @@ local function thinkSeeker(brain: Brain, position: Vector3)
 	if phase() ~= "Seeking" or PlayerState.isFrozen(brain.bot) then
 		return
 	end
+	local level = Config.bot()
+	local now = os.clock()
+	if math.random() < level.TalkChance then
+		say(brain.bot, "seeker")
+	end
 
 	-- Главная цель — тот, у кого Кубок
 	local carrier = Trophy.getCarrier()
 	local carrierPosition = carrier and PlayerState.getPosition(carrier)
-	if carrierPosition and distance(position, carrierPosition) < 160 then
+	local carrierRange = if level.Sight >= 70 then 160 else level.Sight * 2
+	if carrierPosition and distance(position, carrierPosition) < carrierRange then
 		go(brain, carrierPosition, 0.75)
 		return
 	end
 
-	-- Ближайший прячущийся, которого видно
-	local best, bestPosition, bestDistance = nil, nil, Config.BOT_SIGHT
+	if distracted(brain, position) then
+		return
+	end
+
+	-- Ближайший прячущийся, которого видно (глупый водящий быстро сдаётся)
+	local best, bestPosition, bestDistance = nil, nil, level.Sight
 	for _, p in Participants.all() do
-		if PlayerState.getRole(p) == "Hider" and not PlayerState.isSafe(p) then
+		if PlayerState.getRole(p) == "Hider" and not PlayerState.isSafe(p) and (brain.ignore[p] or 0) < now then
 			local pPosition = PlayerState.getPosition(p)
 			if pPosition then
 				local d = distance(position, pPosition)
@@ -434,10 +558,19 @@ local function thinkSeeker(brain: Brain, position: Vector3)
 		end
 	end
 	if best and bestPosition then
+		if brain.chaseTarget ~= best then
+			brain.chaseTarget = best
+			brain.chaseStartedAt = now
+		elseif now - brain.chaseStartedAt > level.GiveUpChase then
+			brain.ignore[best] = now + 8
+			brain.chaseTarget = nil
+			say(brain.bot, "seeker")
+		end
 		brain.spot = nil
 		go(brain, bestPosition, 0.75)
 		return
 	end
+	brain.chaseTarget = nil
 
 	-- Никого не видно — обходим места, где обычно прячутся
 	if not brain.spot or distance(position, brain.spot :: Vector3) < 5 then
@@ -458,6 +591,12 @@ local function think(brain: Brain)
 		return
 	end
 	local role = PlayerState.getRole(bot)
+	if role ~= brain.lastRole then
+		if role == "Jailed" then
+			say(bot, "caught")
+		end
+		brain.lastRole = role
+	end
 	if role == "Seeker" then
 		thinkSeeker(brain, position)
 	elseif role == "Hider" then
@@ -508,7 +647,16 @@ function Bots.spawn()
 		lastPosition = nil,
 		spot = nil,
 		visited = {},
-		searchDelay = math.random(Config.BOT_SEARCH_DELAY_MIN, Config.BOT_SEARCH_DELAY_MAX),
+		searchDelay = math.random(Config.bot().SearchDelayMin, Config.bot().SearchDelayMax),
+		distractedUntil = 0,
+		distractTarget = nil,
+		fleeDecisionUntil = 0,
+		willFlee = false,
+		fleeWrongWay = false,
+		chaseTarget = nil,
+		chaseStartedAt = 0,
+		ignore = {},
+		lastRole = nil,
 		alive = true,
 	}
 	brains[bot] = brain
@@ -519,7 +667,7 @@ function Bots.spawn()
 			if not ok then
 				warn("Бот", name, "запутался:", err)
 			end
-			task.wait(0.25 + math.random() * 0.1)
+			task.wait(Config.bot().ThinkInterval + math.random() * 0.1)
 		end
 	end)
 	return bot

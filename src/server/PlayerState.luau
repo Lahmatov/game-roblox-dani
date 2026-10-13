@@ -114,7 +114,8 @@ local function speedFor(player: Player, s: Status, t: number): number
 		speed += Config.STATUE_BOOST_BONUS
 	end
 	if Participants.isBot(player) then
-		speed += if role == "Seeker" then Config.BOT_SEEKER_SPEED_BONUS else Config.BOT_HIDER_SPEED_BONUS
+		local level = Config.bot()
+		speed += if role == "Seeker" then level.SeekerSpeedBonus else level.HiderSpeedBonus
 	end
 	return speed
 end

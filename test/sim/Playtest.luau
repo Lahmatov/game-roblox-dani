@@ -59,6 +59,7 @@ for path in Mock.files do
 end
 
 local Config = Mock.require(shared.Config, "server")
+Config.HERO_USER_ID = 777 -- проверим статую сына
 -- Статуи пока спят, чтобы не мешать первым проверкам
 Config.STATUE_WAKE_MIN = 10000
 Config.STATUE_WAKE_MAX = 10001
@@ -85,6 +86,15 @@ for _, s in stadium.Statues:GetChildren() do
 end
 check(statueCount == 8, "8 статуй футболистов")
 local GameState = RS:WaitForChild("GameState")
+local heroes = {}
+for _, d in stadium:GetDescendants() do
+	if d.Name == "HeroStatue" then
+		table.insert(heroes, d)
+	end
+end
+check(#heroes == 2, "статуя сына стоит в лобби и на стадионе")
+check(heroes[1] and heroes[1].Pedestal.SurfaceGui.Title.Text == Config.HERO_TITLE, "на постаменте надпись «" .. Config.HERO_TITLE .. "»")
+check(GameState:GetAttribute("BotLevel") == "dumb", "по умолчанию боты глупые")
 local Remotes = RS:WaitForChild("Remotes")
 
 local function role(p)
@@ -528,6 +538,13 @@ check(botsButton ~= nil, "в лобби есть кнопка «Боты: ВЫК
 botsButton.Activated:Fire()
 Mock.advance(1.5)
 check(GameState:GetAttribute("BotsEnabled") == true and botsButton.Text == "Боты: ВКЛ", "нажал — боты включены")
+local levelButton = findGui(dani, function(d)
+	return d.ClassName == "TextButton" and d.Text == "Боты: Глупые"
+end)
+check(levelButton ~= nil, "есть кнопка «Боты: Глупые»")
+levelButton.Activated:Fire()
+Mock.advance(0.5)
+check(GameState:GetAttribute("BotLevel") == "normal" and levelButton.Text == "Боты: Умные", "переключил на умных — дальше проверяем умных ботов")
 fire("Volunteer", dani, true)
 check(Mock.advanceUntil(function()
 	return phase() == "Hiding"
@@ -623,6 +640,49 @@ check(Mock.advanceUntil(function()
 	return phase() == "End"
 end, Config.ROUND_TIME + 10), "раунд с ботом-водящим закончился")
 Mock.advance(Config.END_TIME + 1)
+
+section("Боты: максимально глупые")
+fire("BotLevel", dani, "dumb")
+fire("Volunteer", dani, false)
+local talked = false
+local speechConn = Mock.services.RunService.Heartbeat:Connect(function()
+	for _, m in botCharacters() do
+		if m.Head and m.Head:FindFirstChild("Speech") then
+			talked = true
+		end
+	end
+end)
+check(Mock.advanceUntil(function()
+	return phase() == "Seeking"
+end, 90), "раунд с глупыми ботами начался")
+local dumbSeeker
+for _, m in botCharacters() do
+	if m.Head:FindFirstChild("Flashlight") then
+		dumbSeeker = m
+	end
+end
+Mock.advance(1)
+check(dumbSeeker and dumbSeeker.Humanoid.WalkSpeed == Config.SEEKER_SPEED + Config.BOT_LEVELS.dumb.SeekerSpeedBonus, "глупый бот-водящий медленный (" .. tostring(dumbSeeker and dumbSeeker.Humanoid.WalkSpeed) .. ")")
+-- Даня стоит на виду; глупый водящий, даже если увидит, быстро сдаётся
+teleport(dani, V(0, 0, -50))
+Mock.advance(60)
+check(talked, "глупые боты болтают (над головой появляются фразы)")
+local hidersBefore = GameState:GetAttribute("HidersFree") or 0
+print("  через минуту свободно прячущихся: " .. hidersBefore .. ", в тюрьме: " .. tostring(GameState:GetAttribute("HidersJailed")))
+local openField = 0
+for _, m in botCharacters() do
+	local p = m.HumanoidRootPart.Position
+	if math.abs(p.X) < 95 and math.abs(p.Z) < 60 then
+		openField += 1
+	end
+end
+print("  ботов посреди поля: " .. openField)
+check(Mock.advanceUntil(function()
+	return phase() == "End"
+end, Config.ROUND_TIME + 10), "раунд с глупыми ботами закончился")
+speechConn:Disconnect()
+Mock.advance(Config.END_TIME + 1)
+fire("BotLevel", dani, "normal")
 
 section("Боты: человек ушёл")
 check(Mock.advanceUntil(function()

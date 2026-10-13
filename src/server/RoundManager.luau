@@ -463,6 +463,13 @@ function RoundManager.start(builtMap)
 			gameState:SetAttribute("BotsEnabled", enabled)
 		end
 	end)
+	gameState:SetAttribute("BotLevel", Config.BOT_LEVEL)
+	Remotes.get("BotLevel").OnServerEvent:Connect(function(_player, level)
+		if type(level) == "string" and Config.BOT_LEVELS[level] then
+			Config.BOT_LEVEL = level
+			gameState:SetAttribute("BotLevel", level)
+		end
+	end)
 
 	Players.PlayerAdded:Connect(setupPlayer)
 	for _, player in Players:GetPlayers() do
