@@ -1,0 +1,492 @@
+--!nocheck
+-- Автоматический плейтест: боты играют несколько раундов, а мы проверяем правила.
+-- Запуск: node test/run-playtest.mjs
+
+local Mock = compile(readSource("test/sim/RobloxMock.luau"), "RobloxMock")()
+Mock.compile = compile
+Mock.files = {}
+for _, path in string.split(listSources(), "\n") do
+	Mock.files[path] = readSource(path)
+end
+local V = Mock.Vector3.new
+local game = Mock.game
+local Instance = Mock.Instance
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local SSS = game:GetService("ServerScriptService")
+local StarterPlayer = game:GetService("StarterPlayer")
+
+local passed, failed = 0, 0
+local function check(ok, what)
+	if ok then
+		passed += 1
+		print("  ✅ " .. what)
+	else
+		failed += 1
+		print("  ❌ " .. what)
+	end
+end
+local function section(name)
+	print(string.format("\n=== %s (время игры %.0f с) ===", name, Mock.time()))
+end
+
+-- Дерево как в default.project.json
+local shared = Instance.new("Folder")
+shared.Name = "Shared"
+shared.Parent = RS
+local server = Instance.new("Folder")
+server.Name = "Server"
+server.Parent = SSS
+local playerScripts = Instance.new("Folder")
+playerScripts.Name = "StarterPlayerScripts"
+playerScripts.Parent = StarterPlayer
+for path in Mock.files do
+	local dir, file = string.match(path, "^src/(%w+)/(.+)%.luau$")
+	if dir then
+		local name, kind = string.match(file, "^(.-)%.(%a+)$")
+		if dir == "shared" then
+			Mock.addScript(shared, file, "ModuleScript", path)
+		elseif dir == "server" then
+			if kind == "server" then
+				Mock.addScript(server, name, "Script", path)
+			else
+				Mock.addScript(server, file, "ModuleScript", path)
+			end
+		elseif dir == "client" then
+			Mock.addScript(playerScripts, name, "LocalScript", path)
+		end
+	end
+end
+
+local Config = Mock.require(shared.Config, "server")
+-- Статуи пока спят, чтобы не мешать первым проверкам
+Config.STATUE_WAKE_MIN = 10000
+Config.STATUE_WAKE_MAX = 10001
+
+section("Запуск сервера")
+Mock.runScript(server.Main, "server")
+Mock.advance(0.5)
+check(#Mock.errors == 0, "сервер запустился без ошибок")
+local stadium = Mock.workspace:FindFirstChild("Stadium")
+check(stadium ~= nil, "стадион построен")
+local partCount = 0
+for _, d in stadium:GetDescendants() do
+	if d:IsA("BasePart") then
+		partCount += 1
+	end
+end
+print("  деталей на стадионе: " .. partCount)
+check(partCount > 300 and partCount < 5000, "размер стадиона разумный (300..5000 деталей)")
+local statueCount = 0
+for _, s in stadium.Statues:GetChildren() do
+	if s:IsA("Model") then
+		statueCount += 1
+	end
+end
+check(statueCount == 8, "8 статуй футболистов")
+local GameState = RS:WaitForChild("GameState")
+local Remotes = RS:WaitForChild("Remotes")
+
+local function role(p)
+	return p:GetAttribute("Role")
+end
+local function phase()
+	return GameState:GetAttribute("Phase")
+end
+local function pos(p)
+	return p.Character.HumanoidRootPart.Position
+end
+local function hum(p)
+	return p.Character.Humanoid
+end
+local function goTo(p, v)
+	hum(p):MoveTo(v)
+end
+local function stop(p)
+	hum(p):MoveTo(pos(p))
+end
+local function teleport(p, v)
+	p.Character:PivotTo(Mock.CFrame.new(v + V(0, 3, 0)))
+	stop(p)
+end
+local function fire(name, player, ...)
+	Remotes[name].OnServerEvent:Fire(player, ...)
+end
+local function announced(pattern, since)
+	for _, a in Mock.announcements do
+		if a.t >= (since or 0) and string.find(a.text, pattern, 1, true) then
+			return true
+		end
+	end
+	return false
+end
+local function findGui(player, predicate)
+	for _, d in player.PlayerGui:GetDescendants() do
+		if predicate(d) then
+			return d
+		end
+	end
+	return nil
+end
+local function trophy()
+	return Mock.workspace:FindFirstChild("WorldCup")
+end
+
+section("Игроки заходят")
+local ana = Mock.addPlayer("Ana")
+local bo = Mock.addPlayer("Bo")
+local cid = Mock.addPlayer("Cid")
+local dani = Mock.addPlayer("Dani")
+local all = { ana, bo, cid, dani }
+for _, p in all do
+	Mock.spawnCharacter(p)
+end
+Mock.localPlayer = dani
+Players.LocalPlayer = dani
+Mock.runScript(playerScripts.Main, "client")
+Mock.advance(0.5)
+check(#Mock.errors == 0, "экран игрока (клиент) запустился без ошибок")
+check(dani.PlayerGui:FindFirstChild("PryatkiUI") ~= nil, "у Дани появился экран игры")
+check(role(ana) == "Lobby" and pos(ana).Y > 150, "игроки ждут в стеклянной ложе над стадионом")
+check(dani.leaderstats["Монеты"].Value == 0, "у новичка 0 монет")
+check(phase() == "Intermission", "4 игрока — пошёл отсчёт до раунда")
+
+section("Кнопка «Хочу водить»")
+local volunteerButton = findGui(dani, function(d)
+	return d.ClassName == "TextButton" and d.Text == "Хочу водить!"
+end)
+check(volunteerButton ~= nil, "кнопка «Хочу водить!» видна в лобби")
+volunteerButton.Activated:Fire()
+Mock.advance(0.3)
+check(dani:GetAttribute("Volunteer") == true, "Даня нажал — он в списке желающих")
+volunteerButton.Activated:Fire()
+Mock.advance(0.3)
+check(dani:GetAttribute("Volunteer") == false, "нажал ещё раз — передумал")
+fire("Volunteer", bo, true)
+
+-- РАУНД 1 ---------------------------------------------------------------
+section("Раунд 1: прятки")
+check(Mock.advanceUntil(function()
+	return phase() == "Hiding"
+end, 25), "после перерыва начались прятки")
+check(role(bo) == "Seeker", "водит Bo — единственный желающий")
+check(role(ana) == "Hider" and role(cid) == "Hider" and role(dani) == "Hider", "остальные прячутся")
+check(pos(bo).Y > 290, "водящий заперт в будке и не подглядывает")
+check((pos(ana) - V(0, 3, 0)).Magnitude < 20, "прячущиеся появились в центре поля")
+Mock.advance(1)
+check(findGui(dani, function(d)
+	return d.ClassName == "TextButton" and string.find(d.Text, "Рывок", 1, true) ~= nil
+end) ~= nil, "у прячущегося на экране кнопка «Рывок»")
+
+goTo(ana, V(40, 0, -30))
+goTo(cid, V(-60, 0, 40))
+goTo(dani, V(10, 0, 10))
+
+section("Раунд 1: поиски")
+check(Mock.advanceUntil(function()
+	return phase() == "Seeking"
+end, 50), "через 45 секунд водящего выпустили")
+check((pos(bo) - V(0, 3, 80)).Magnitude < 5, "водящий выходит из туннеля")
+check(bo.Character.Head:FindFirstChild("Flashlight") ~= nil, "у водящего фонарик")
+check(bo.Character.Head:FindFirstChild("SeekerTag") ~= nil, "над водящим надпись ВОДЯЩИЙ")
+check(trophy() ~= nil, "Кубок мира спрятан на стадионе")
+local trophyPos = trophy().PrimaryPart.Position
+print("  Кубок спрятан в точке " .. tostring(trophyPos))
+
+-- Рывок
+fire("Dash", ana)
+Mock.advance(0.3)
+check(hum(ana).WalkSpeed == Config.HIDER_SPEED + Config.DASH_BONUS, "рывок: Ana бежит быстрее (" .. hum(ana).WalkSpeed .. ")")
+local readyAt = ana:GetAttribute("DashReadyAt")
+fire("Dash", ana)
+Mock.advance(0.1)
+check(ana:GetAttribute("DashReadyAt") == readyAt, "второй рывок сразу нельзя — ждём 30 секунд")
+Mock.advance(Config.DASH_DURATION + 0.3)
+check(hum(ana).WalkSpeed == Config.HIDER_SPEED, "рывок закончился, скорость обычная")
+fire("Dash", bo)
+Mock.advance(0.2)
+check(hum(bo).WalkSpeed == Config.SEEKER_SPEED, "водящий рывок не может")
+
+-- Мяч
+teleport(ana, V(40, 0, -30))
+teleport(bo, V(55, 0, -30))
+fire("Kick", ana, V(1, 0, 0))
+Mock.advance(0.5)
+check(bo:GetAttribute("Frozen") == true and hum(bo).WalkSpeed == 0, "мяч попал — водящий замер")
+check(announced("попал мячом"), "сообщение «попал мячом в водящего»")
+local kickReady = ana:GetAttribute("KickReadyAt")
+fire("Kick", ana, V(1, 0, 0))
+Mock.advance(0.1)
+check(ana:GetAttribute("KickReadyAt") == kickReady, "второй мяч сразу нельзя")
+fire("Kick", ana, V(0 / 0, 0, 0))
+Mock.advance(0.1)
+check(#Mock.errors == 0, "мяч с неправильным направлением не ломает сервер")
+
+-- Поимка
+goTo(bo, pos(ana))
+Mock.advance(1)
+check(role(ana) == "Hider", "замёрзший водящий не может поймать")
+check(Mock.advanceUntil(function()
+	return role(ana) == "Jailed"
+end, 6), "водящий отмёрз и поймал Ana")
+local jail = V(-124, 0, 45)
+check((pos(ana) - jail).Magnitude < 9, "Ana в тюрьме")
+check(announced("поймал Ana"), "сообщение «Водящий поймал Ana»")
+Mock.advance(0.3)
+check(findGui(dani, function(d)
+	return d.ClassName == "TextLabel" and string.find(d.Text, "в тюрьме 1/3", 1, true) ~= nil
+end) ~= nil, "на экране «в тюрьме 1/3»")
+
+-- Персонаж Ana пересоздался — снова в тюрьме
+Mock.spawnCharacter(ana)
+Mock.advance(0.5)
+check(role(ana) == "Jailed" and (pos(ana) - jail).Magnitude < 9, "если пойманный перезашёл персонажем, он всё равно в тюрьме")
+
+-- Освобождение
+teleport(bo, V(100, 0, 60))
+teleport(ana, jail + V(6, 0, 0)) -- Ana подошла к решётке изнутри
+teleport(cid, jail + V(20, 0, 0))
+goTo(cid, jail + V(8.5, 0, 0)) -- Cid подбегает снаружи
+check(Mock.advanceUntil(function()
+	return role(ana) == "Hider"
+end, 5), "Cid коснулся Ana через решётку — Ana свободна")
+check((pos(ana) - V(0, 3, 0)).Magnitude < 20, "освобождённая Ana появилась в центре поля")
+check(announced("Cid освободил Ana"), "сообщение «Cid освободил Ana»")
+teleport(bo, pos(ana) + V(2, 0, 0))
+Mock.advance(0.5)
+check(role(ana) == "Hider", "сразу после освобождения Ana нельзя поймать (защита 4 с)")
+teleport(bo, V(-160, 0, -180))
+teleport(ana, V(60, 0, -60))
+teleport(cid, V(-60, 0, -60)) -- Cid уходит от тюрьмы
+
+-- Кубок
+teleport(dani, trophyPos + V(10, 0, 0))
+goTo(dani, trophyPos)
+check(Mock.advanceUntil(function()
+	return GameState:GetAttribute("TrophyCarrier") == "Dani"
+end, 5), "Даня нашёл Кубок и подобрал его")
+check(announced("Dani нашёл Кубок"), "сообщение «Dani нашёл Кубок мира!»")
+Mock.advance(0.3)
+check(findGui(dani, function(d)
+	return d.ClassName == "TextLabel" and string.find(d.Text, "У тебя Кубок", 1, true) ~= nil
+end) ~= nil, "у Дани на экране «У тебя Кубок! Беги к воротам!»")
+check(role(bo) == "Seeker" and not announced("ГООО"), "пока не забил — гола нет")
+
+-- Пробуем: водящий ловит Даню с Кубком — Кубок падает
+teleport(dani, V(20, 0, 20))
+goTo(bo, V(20, 0, 20))
+teleport(bo, V(24, 0, 20))
+check(Mock.advanceUntil(function()
+	return role(dani) == "Jailed"
+end, 3), "водящий поймал Даню с Кубком")
+check(GameState:GetAttribute("TrophyCarrier") == "", "Кубок выпал")
+check(announced("Dani уронил Кубок"), "сообщение «Dani уронил Кубок!»")
+local dropped = trophy().PrimaryPart.Position
+check((V(dropped.X, 0, dropped.Z) - V(20, 0, 20)).Magnitude < 4, "Кубок лежит там, где поймали")
+teleport(bo, V(-160, 0, -180))
+
+-- Освобождённый игрок подбирает
+teleport(cid, dropped + V(5, 0, 0))
+goTo(cid, dropped)
+check(Mock.advanceUntil(function()
+	return GameState:GetAttribute("TrophyCarrier") == "Cid"
+end, 4), "Cid подобрал упавший Кубок")
+goTo(cid, V(113, 0, 0)) -- в восточные ворота
+check(Mock.advanceUntil(function()
+	return phase() == "End"
+end, 20), "Cid добежал до ворот")
+check(announced("ГООООЛ! Cid забил Кубок"), "ГОЛ! Прячущиеся победили")
+Mock.advance(0.2)
+local C = Config.COINS
+check(cid:GetAttribute("Coins") == C.RESCUE + C.PLAY + C.WIN + C.GOAL, "Cid получил монеты: спасение + раунд + победа + гол (" .. tostring(cid:GetAttribute("Coins")) .. ")")
+check(dani:GetAttribute("Coins") == C.PLAY + C.WIN, "Даня (из тюрьмы) тоже получил монеты за победу команды")
+check(bo:GetAttribute("Coins") == C.CATCH * 2 + C.PLAY, "водящий получил монеты за двух пойманных")
+Mock.advance(Config.END_TIME + 0.5)
+check(phase() == "Intermission", "новый перерыв перед раундом")
+check(role(bo) == "Lobby" and role(dani) == "Lobby", "все снова в лобби")
+check(pos(dani).Y > 150 and pos(bo).Y > 150, "все вернулись в ложу")
+check(trophy() == nil, "Кубок убран")
+check(bo.Character.Head:FindFirstChild("Flashlight") == nil, "фонарик у бывшего водящего забрали")
+
+-- РАУНД 2 ---------------------------------------------------------------
+section("Раунд 2: водящий ловит всех")
+fire("Volunteer", bo, false)
+fire("Volunteer", cid, true)
+check(Mock.advanceUntil(function()
+	return phase() == "Seeking"
+end, 80), "раунд 2 начался")
+check(role(cid) == "Seeker", "водит Cid (новый желающий)")
+local victims = { ana, bo, dani }
+for i, p in victims do
+	teleport(p, V(-80 + i * 40, 0, -40))
+end
+for _, p in victims do
+	teleport(cid, pos(p) + V(10, 0, 0))
+	goTo(cid, pos(p))
+	Mock.advanceUntil(function()
+		return role(p) == "Jailed" or phase() ~= "Seeking"
+	end, 3)
+end
+Mock.advance(0.3)
+check(announced("Водящий поймал всех"), "водящий поймал всех — победа водящего")
+Mock.advance(0.2)
+check(cid:GetAttribute("Coins") == C.RESCUE + C.PLAY + C.WIN + C.GOAL + 3 * C.CATCH + C.PLAY + C.WIN, "водящий получил монеты за победу")
+
+-- РАУНД 3 ---------------------------------------------------------------
+section("Раунд 3: статуи и конец времени")
+Config.ROUND_TIME = 90
+Config.STATUE_WAKE_MIN = 3
+Config.STATUE_WAKE_MAX = 4
+fire("Volunteer", cid, false)
+check(Mock.advanceUntil(function()
+	return phase() == "Seeking"
+end, 80), "раунд 3 начался")
+local seeker
+for _, p in all do
+	if role(p) == "Seeker" then
+		seeker = p
+	end
+end
+check(seeker ~= nil and seeker ~= cid, "без желающих водящий выбран случайно, но не тот, кто водил прошлый раз (" .. (seeker and seeker.Name or "?") .. ")")
+teleport(seeker, V(-160, 0, -180))
+local hiders = {}
+for _, p in all do
+	if p ~= seeker then
+		table.insert(hiders, p)
+	end
+end
+-- Все прячущиеся стоят возле статуй
+local homes = { V(-95, 0, 76), V(-60, 0, 76), V(60, 0, 76) }
+for i, p in hiders do
+	teleport(p, homes[i] + V(0, 0, -6))
+end
+check(Mock.advanceUntil(function()
+	return announced("Статуи ожили")
+end, 10), "статуи ожили")
+local awakeStatue
+for _, s in stadium.Statues:GetChildren() do
+	if s:IsA("Model") and not s.HumanoidRootPart.Anchored then
+		awakeStatue = s
+	end
+end
+check(awakeStatue ~= nil, "ожившая статуя может двигаться")
+local helped = Mock.advanceUntil(function()
+	for _, p in hiders do
+		if p:GetAttribute("Boosted") or p:GetAttribute("Frozen") then
+			return true
+		end
+	end
+	return false
+end, Config.STATUE_AWAKE_TIME)
+check(helped, "статуя подбежала и кого-то ускорила (зелёная) или заморозила (красная)")
+Config.STATUE_WAKE_MIN = 10000
+Config.STATUE_WAKE_MAX = 10001
+Mock.advance(Config.STATUE_AWAKE_TIME + 10)
+local allAsleep = true
+for _, s in stadium.Statues:GetChildren() do
+	if s:IsA("Model") and not s.HumanoidRootPart.Anchored then
+		allAsleep = false
+	end
+end
+check(allAsleep, "статуи вернулись на место и снова окаменели")
+check(Mock.advanceUntil(function()
+	return phase() == "End"
+end, 120), "время раунда кончилось")
+check(announced("Время вышло"), "время вышло — водящий победил")
+
+-- РАУНД 4 ---------------------------------------------------------------
+section("Раунд 4: игроки уходят")
+check(Mock.advanceUntil(function()
+	return phase() == "Seeking"
+end, 80), "раунд 4 начался")
+seeker = nil
+hiders = {}
+for _, p in all do
+	if role(p) == "Seeker" then
+		seeker = p
+	else
+		table.insert(hiders, p)
+	end
+end
+teleport(seeker, V(-160, 0, -180))
+local carrier = hiders[1]
+local tp = trophy().PrimaryPart.Position
+teleport(carrier, tp + V(5, 0, 0))
+goTo(carrier, tp)
+check(Mock.advanceUntil(function()
+	return GameState:GetAttribute("TrophyCarrier") == carrier.Name
+end, 4), carrier.Name .. " взял Кубок")
+goTo(carrier, V(30, 0, 30))
+Mock.advance(2)
+Mock.removePlayer(carrier)
+Mock.advance(0.5)
+check(GameState:GetAttribute("TrophyCarrier") == "", "игрок с Кубком вышел — Кубок упал и его можно подобрать")
+check(phase() == "Seeking", "раунд продолжается")
+Mock.removePlayer(seeker)
+check(Mock.advanceUntil(function()
+	return phase() == "End"
+end, 2), "водящий вышел — раунд закончился")
+check(announced("Водящий ушёл"), "прячущиеся победили, потому что водящий ушёл")
+
+-- МАГАЗИН ---------------------------------------------------------------
+section("Магазин форм")
+local shopButton = findGui(dani, function(d)
+	return d.ClassName == "TextButton" and d.Text == "Магазин"
+end)
+shopButton.Activated:Fire()
+Mock.advance(0.2)
+-- Добавим Дане монет, чтобы точно хватило на покупку
+Mock.require(server.Economy, "server").addCoins(dani, 100)
+Mock.advance(0.2)
+local coinsBefore = dani:GetAttribute("Coins")
+print("  у Дани монет: " .. tostring(coinsBefore))
+local buyReal = findGui(dani, function(d)
+	return d.ClassName == "TextButton" and d.Text == "Купить: 150"
+end)
+check(buyReal ~= nil, "в магазине есть форма за 150")
+if coinsBefore >= 150 then
+	buyReal.Activated:Fire()
+	Mock.advance(0.3)
+	check(dani:GetAttribute("Coins") == coinsBefore - 150, "купил форму Реала за 150 монет")
+	check(dani:GetAttribute("EquippedKit") == "Real", "форма Реала надета")
+	local colors = dani.Character:FindFirstChildOfClass("BodyColors")
+	check(colors.TorsoColor3 == Config.getKit("Real").Shirt, "персонаж стал в белой форме")
+	check(dani.Character:FindFirstChildOfClass("Shirt") == nil, "старая футболка снята")
+else
+	check(false, "у Дани не хватает монет для проверки покупки")
+end
+local coinsNow = dani:GetAttribute("Coins")
+fire("BuyKit", dani, "Gold")
+Mock.advance(0.2)
+check(dani:GetAttribute("Coins") == coinsNow and dani:GetAttribute("EquippedKit") == "Real", "золотую форму за 1000 купить нельзя — не хватает монет")
+fire("EquipKit", dani, "Brazil")
+Mock.advance(0.2)
+check(dani:GetAttribute("EquippedKit") == "Real", "некупленную форму надеть нельзя")
+fire("EquipKit", dani, "Sporting")
+Mock.advance(0.2)
+check(dani:GetAttribute("EquippedKit") == "Sporting", "можно снова надеть форму Спортинга")
+fire("BuyKit", dani, { hack = true })
+fire("EquipKit", dani, 12345)
+Mock.advance(0.2)
+check(#Mock.errors == 0, "странные запросы в магазин не ломают сервер")
+
+section("Сохранение монет")
+local savedCoins = dani:GetAttribute("Coins")
+local userId = dani.UserId
+Mock.removePlayer(dani)
+Mock.advance(0.5)
+local dani2 = Mock.addPlayer("Dani", userId)
+Mock.advance(0.5)
+check(dani2:GetAttribute("Coins") == savedCoins, "Даня вышел и зашёл — монеты сохранились (" .. tostring(savedCoins) .. ")")
+check(string.find(dani2:GetAttribute("OwnedKits"), "Real", 1, true) ~= nil, "купленная форма тоже сохранилась")
+
+section("Итог")
+for _, e in Mock.errors do
+	print("  ОШИБКА: " .. tostring(e))
+end
+for _, w in Mock.warnings do
+	print("  предупреждение: " .. tostring(w))
+end
+check(#Mock.errors == 0, "за весь плейтест не было ни одной ошибки в скриптах")
+print(string.format("\nПройдено: %d, провалено: %d", passed, failed))
+return failed

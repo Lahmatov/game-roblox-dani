@@ -1,0 +1,81 @@
+-- Все настройки игры в одном месте. Меняй числа здесь, чтобы настроить игру.
+
+local Config = {}
+
+-- Игроки
+Config.MIN_PLAYERS = 2 -- сколько нужно игроков, чтобы начать раунд
+Config.MAX_HIDERS = 22 -- больше прячущихся не бывает (остальные смотрят из ложи)
+
+-- Время (в секундах)
+Config.INTERMISSION_TIME = 20 -- перерыв перед раундом
+Config.HIDE_TIME = 45 -- сколько времени даётся, чтобы спрятаться
+Config.ROUND_TIME = 15 * 60 -- сколько длятся поиски
+Config.END_TIME = 8 -- сколько показываем, кто победил
+
+-- Скорость
+Config.HIDER_SPEED = 16
+Config.SEEKER_SPEED = 18
+Config.JUMP_HEIGHT = 7.2
+
+-- Поимка и тюрьма
+Config.CATCH_DISTANCE = 5 -- насколько близко водящий должен подойти, чтобы поймать
+Config.RESCUE_DISTANCE = 6 -- насколько близко надо подойти к другу в тюрьме, чтобы освободить
+Config.RESCUE_IMMUNITY = 4 -- сколько секунд освобождённого нельзя поймать
+
+-- Ускорение (рывок)
+Config.DASH_COOLDOWN = 30
+Config.DASH_DURATION = 2.5
+Config.DASH_BONUS = 16
+
+-- Мяч
+Config.KICK_COOLDOWN = 8
+Config.KICK_FREEZE = 2 -- на сколько секунд замирает водящий
+Config.KICK_BALL_SPEED = 90
+Config.KICK_BALL_LIFETIME = 3
+
+-- Кубок
+Config.TROPHY_PICKUP_DISTANCE = 4.5
+Config.TROPHY_HINT_INTERVAL = 60
+Config.TROPHY_HINT_DURATION = 6
+
+-- Статуи
+Config.STATUE_WAKE_MIN = 25
+Config.STATUE_WAKE_MAX = 50
+Config.STATUE_AWAKE_TIME = 12
+Config.STATUE_SPEED = 14
+Config.STATUE_TOUCH_DISTANCE = 4.5
+Config.STATUE_FREEZE = 2
+Config.STATUE_BOOST_TIME = 5
+Config.STATUE_BOOST_BONUS = 10
+
+-- Монеты
+Config.COINS = {
+	PLAY = 5, -- за участие в раунде
+	WIN = 50, -- за победу
+	GOAL = 100, -- кто забил Кубок в ворота
+	CATCH = 10, -- водящему за каждого пойманного
+	RESCUE = 15, -- за освобождение друга
+}
+
+-- Футбольные формы в магазине
+Config.KITS = {
+	{ Id = "Sporting", Name = "Спортинг", Price = 0, Shirt = Color3.fromRGB(0, 128, 72), Shorts = Color3.fromRGB(255, 255, 255) },
+	{ Id = "Real", Name = "Реал", Price = 150, Shirt = Color3.fromRGB(245, 245, 245), Shorts = Color3.fromRGB(245, 245, 245) },
+	{ Id = "Barca", Name = "Барса", Price = 150, Shirt = Color3.fromRGB(165, 0, 68), Shorts = Color3.fromRGB(0, 77, 152) },
+	{ Id = "Portugal", Name = "Португалия", Price = 200, Shirt = Color3.fromRGB(200, 16, 46), Shorts = Color3.fromRGB(0, 102, 51) },
+	{ Id = "Brazil", Name = "Бразилия", Price = 200, Shirt = Color3.fromRGB(255, 220, 0), Shorts = Color3.fromRGB(0, 56, 168) },
+	{ Id = "Argentina", Name = "Аргентина", Price = 200, Shirt = Color3.fromRGB(117, 170, 219), Shorts = Color3.fromRGB(20, 20, 20) },
+	{ Id = "Gold", Name = "Золотая", Price = 1000, Shirt = Color3.fromRGB(255, 200, 40), Shorts = Color3.fromRGB(255, 200, 40) },
+}
+Config.DEFAULT_KIT = "Sporting"
+
+function Config.getKit(id: string)
+	for _, kit in Config.KITS do
+		if kit.Id == id then
+			return kit
+		end
+	end
+	return nil
+end
+
+return Config
