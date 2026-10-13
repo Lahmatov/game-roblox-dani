@@ -42,6 +42,16 @@ end
 
 function PlayerState.setRole(player: Player, role: string)
 	player:SetAttribute("Role", role)
+	PlayerState.syncCharacter(player)
+end
+
+-- Роль видна и на персонаже: так экран игрока знает, за кем можно наблюдать
+function PlayerState.syncCharacter(player: Player)
+	local character = player.Character
+	if character then
+		character:SetAttribute("Participant", true)
+		character:SetAttribute("Role", PlayerState.getRole(player))
+	end
 end
 
 function PlayerState.getCharacterParts(player: Player): (BasePart?, Humanoid?)

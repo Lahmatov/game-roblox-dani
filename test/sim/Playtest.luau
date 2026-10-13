@@ -286,6 +286,9 @@ check(findGui(dani, function(d)
 	return d.ClassName == "TextLabel" and string.find(d.Text, "У тебя Кубок", 1, true) ~= nil
 end) ~= nil, "у Дани на экране «У тебя Кубок! Беги к воротам!»")
 check(role(bo) == "Seeker" and not announced("ГООО"), "пока не забил — гола нет")
+fire("Transform", dani)
+Mock.advance(0.3)
+check(dani:GetAttribute("Prop") == nil, "с Кубком в предмет не превратишься")
 
 -- Пробуем: водящий ловит Даню с Кубком — Кубок падает
 teleport(dani, V(20, 0, 20))
@@ -298,6 +301,21 @@ check(GameState:GetAttribute("TrophyCarrier") == "", "Кубок выпал")
 check(announced("Dani уронил Кубок"), "сообщение «Dani уронил Кубок!»")
 local dropped = trophy().PrimaryPart.Position
 check((V(dropped.X, 0, dropped.Z) - V(20, 0, 20)).Magnitude < 4, "Кубок лежит там, где поймали")
+
+-- Пойманный Даня смотрит за другими
+Mock.advance(0.3)
+local camera = Mock.workspace.CurrentCamera
+local spectateNext = findGui(dani, function(d)
+	return d.ClassName == "TextButton" and d.Text == "▶"
+end)
+check(spectateNext and spectateNext.Parent.Visible, "в тюрьме появились кнопки наблюдения")
+spectateNext.Activated:Fire()
+Mock.advance(0.3)
+local subject = camera.CameraSubject
+check(subject and subject.Parent ~= dani.Character and subject.Parent:GetAttribute("Participant"), "Даня смотрит глазами другого игрока (" .. (subject and subject.Parent.Name or "?") .. ")")
+check(findGui(dani, function(d)
+	return d.ClassName == "TextButton" and string.find(d.Text, "Смотришь:", 1, true) ~= nil
+end) ~= nil, "на кнопке написано, за кем смотрит")
 teleport(bo, V(-160, 0, -180))
 
 -- Освобождённый игрок подбирает
@@ -335,6 +353,34 @@ local victims = { ana, bo, dani }
 for i, p in victims do
 	teleport(p, V(-80 + i * 40, 0, -40))
 end
+
+-- Превращение в предмет
+fire("Transform", ana)
+Mock.advance(0.3)
+check(ana:GetAttribute("Prop") == "Конус", "Ana превратилась в конус")
+check(ana.Character:FindFirstChild("Prop") ~= nil and ana.Character.Head.Transparency == 1, "вместо Ana стоит конус, сама она невидима")
+fire("Transform", ana)
+Mock.advance(0.3)
+check(ana:GetAttribute("Prop") == "Конус", "сразу снова нажать нельзя (подождать 3 секунды)")
+Mock.advance(Config.TRANSFORM_COOLDOWN)
+fire("Transform", ana)
+Mock.advance(0.3)
+check(ana:GetAttribute("Prop") == nil and ana.Character.Head.Transparency == 0, "Ana снова стала собой")
+Mock.advance(Config.TRANSFORM_COOLDOWN)
+fire("Transform", ana)
+Mock.advance(0.3)
+check(ana:GetAttribute("Prop") == "Мяч", "следующее превращение — мяч")
+
+-- Сердцебиение у Дани, когда водящий рядом
+local heart = findGui(dani, function(d)
+	return d.ClassName == "UIStroke"
+end)
+check(heart and heart.Transparency == 1, "пока водящий далеко, сердце не стучит")
+teleport(cid, pos(dani) + V(20, -3, 0))
+check(Mock.advanceUntil(function()
+	return heart.Transparency < 1
+end, 2), "водящий в 20 шагах — края экрана красные, стучит сердце")
+teleport(cid, V(150, 0, 150))
 for _, p in victims do
 	teleport(cid, pos(p) + V(10, 0, 0))
 	goTo(cid, pos(p))
@@ -344,6 +390,7 @@ for _, p in victims do
 end
 Mock.advance(0.3)
 check(announced("Водящий поймал всех"), "водящий поймал всех — победа водящего")
+check(ana:GetAttribute("Prop") == nil and ana.Character.Head.Transparency == 0, "предмет Ana пойман — превращение снято")
 Mock.advance(0.2)
 check(cid:GetAttribute("Coins") == C.RESCUE + C.PLAY + C.WIN + C.GOAL + 3 * C.CATCH + C.PLAY + C.WIN, "водящий получил монеты за победу")
 
@@ -644,11 +691,14 @@ Mock.advance(Config.END_TIME + 1)
 section("Боты: максимально глупые")
 fire("BotLevel", dani, "dumb")
 fire("Volunteer", dani, false)
-local talked = false
+local talked, botProp = false, false
 local speechConn = Mock.services.RunService.Heartbeat:Connect(function()
 	for _, m in botCharacters() do
 		if m.Head and m.Head:FindFirstChild("Speech") then
 			talked = true
+		end
+		if m:FindFirstChild("Prop") then
+			botProp = true
 		end
 	end
 end)
@@ -667,6 +717,7 @@ check(dumbSeeker and dumbSeeker.Humanoid.WalkSpeed == Config.SEEKER_SPEED + Conf
 teleport(dani, V(0, 0, -50))
 Mock.advance(60)
 check(talked, "глупые боты болтают (над головой появляются фразы)")
+check(botProp, "боты тоже превращаются в предметы")
 local hidersBefore = GameState:GetAttribute("HidersFree") or 0
 print("  через минуту свободно прячущихся: " .. hidersBefore .. ", в тюрьме: " .. tostring(GameState:GetAttribute("HidersJailed")))
 local openField = 0
@@ -697,6 +748,12 @@ Mock.advance(Config.END_TIME + 1)
 check(#botCharacters() == 0, "боты убраны")
 Mock.advance(5)
 check(phase() == "Waiting", "сервер ждёт новых игроков")
+
+section("Звуки")
+for _, name in { "Whistle", "Catch", "Rescue", "Trophy", "Goal", "Kick", "Dash", "Transform", "Statue" } do
+	check((Mock.sfx[name] or 0) > 0, "звучит «" .. name .. "» (" .. tostring(Mock.sfx[name] or 0) .. " раз)")
+end
+check(Mock.emitted > 0, "на гол — салют из конфетти")
 
 section("Итог")
 for _, e in Mock.errors do

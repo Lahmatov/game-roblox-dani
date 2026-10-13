@@ -10,6 +10,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local PlayerState = require(script.Parent.PlayerState)
 local Participants = require(script.Parent.Participants)
+local Sfx = require(script.Parent.Sfx)
 
 local Abilities = {}
 
@@ -99,6 +100,7 @@ function Abilities.tryDash(player): boolean
 	end
 	player:SetAttribute("DashReadyAt", t + Config.DASH_COOLDOWN)
 	PlayerState.dash(player, Config.DASH_DURATION)
+	Sfx.play("Dash", PlayerState.getPosition(player))
 	return true
 end
 
@@ -113,6 +115,7 @@ function Abilities.tryKick(player, direction): boolean
 	end
 	player:SetAttribute("KickReadyAt", t + Config.KICK_COOLDOWN)
 	kickBall(player, direction)
+	Sfx.play("Kick", PlayerState.getPosition(player))
 	return true
 end
 

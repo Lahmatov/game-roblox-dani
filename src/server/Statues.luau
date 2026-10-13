@@ -8,6 +8,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local PlayerState = require(script.Parent.PlayerState)
 local Trophy = require(script.Parent.Trophy)
 local Participants = require(script.Parent.Participants)
+local Sfx = require(script.Parent.Sfx)
 
 local Statues = {}
 
@@ -248,6 +249,7 @@ function Statues.enable()
 				wake(statue)
 			end
 			if count > 0 then
+				Sfx.play("Statue")
 				announce("Статуи ожили! Зелёные помогают, красные мешают!", Color3.fromRGB(255, 220, 60))
 			end
 		end

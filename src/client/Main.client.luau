@@ -89,12 +89,37 @@ local statusLabel = label(gui, "", UDim2.new(0.7, 0, 0, 40), UDim2.new(0.15, 0, 
 
 -- Кнопки суперспособностей
 local abilities = Instance.new("Frame")
-abilities.Size = UDim2.fromOffset(170, 130)
-abilities.Position = UDim2.new(1, -180, 1, -250)
+abilities.Size = UDim2.fromOffset(170, 200)
+abilities.Position = UDim2.new(1, -180, 1, -320)
 abilities.BackgroundTransparency = 1
 abilities.Parent = gui
 local dashButton = button(abilities, "Рывок (Q)", UDim2.new(1, 0, 0, 58), UDim2.fromOffset(0, 0), Color3.fromRGB(30, 120, 220))
 local kickButton = button(abilities, "Мяч (F)", UDim2.new(1, 0, 0, 58), UDim2.fromOffset(0, 70), GREEN)
+local transformButton = button(abilities, "Предмет (E)", UDim2.new(1, 0, 0, 58), UDim2.fromOffset(0, 140), Color3.fromRGB(230, 120, 20))
+
+-- Сердцебиение: края экрана краснеют, когда водящий рядом
+local heartFrame = Instance.new("Frame")
+-- Рамка рисуется снаружи краёв, поэтому делаем её чуть меньше экрана — тогда она ровно по краям
+heartFrame.Size = UDim2.new(1, -80, 1, -80)
+heartFrame.Position = UDim2.fromOffset(40, 40)
+heartFrame.BackgroundTransparency = 1
+heartFrame.Parent = gui
+local heartStroke = Instance.new("UIStroke")
+heartStroke.Color = Color3.fromRGB(220, 0, 30)
+heartStroke.Thickness = 40
+heartStroke.Transparency = 1
+heartStroke.Parent = heartFrame
+
+-- Наблюдение: пойманные и зрители смотрят глазами других
+local spectate = Instance.new("Frame")
+spectate.Size = UDim2.fromOffset(360, 50)
+spectate.Position = UDim2.new(0.5, -180, 1, -120)
+spectate.BackgroundTransparency = 1
+spectate.Visible = false
+spectate.Parent = gui
+local prevButton = button(spectate, "◀", UDim2.fromOffset(50, 50), UDim2.fromOffset(0, 0), Color3.fromRGB(60, 60, 80))
+local watchButton = button(spectate, "Смотреть за игроками", UDim2.new(1, -110, 1, 0), UDim2.fromOffset(55, 0), Color3.fromRGB(60, 60, 80))
+local nextButton = button(spectate, "▶", UDim2.fromOffset(50, 50), UDim2.new(1, -50, 0, 0), Color3.fromRGB(60, 60, 80))
 
 -- Кнопка «Хочу водить»
 local volunteerButton = button(gui, "", UDim2.fromOffset(200, 54), UDim2.new(0, 12, 0.5, -60), RED)
@@ -212,7 +237,11 @@ local function kick()
 	local camera = Workspace.CurrentCamera
 	Remotes.get("Kick"):FireServer(camera.CFrame.LookVector)
 end
+local function transform()
+	Remotes.get("Transform"):FireServer()
+end
 dashButton.Activated:Connect(dash)
+transformButton.Activated:Connect(transform)
 kickButton.Activated:Connect(kick)
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then
@@ -222,6 +251,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		dash()
 	elseif input.KeyCode == Enum.KeyCode.F then
 		kick()
+	elseif input.KeyCode == Enum.KeyCode.E then
+		transform()
 	end
 end)
 
@@ -242,6 +273,123 @@ Remotes.get("Announce").OnClientEvent:Connect(function(text: string, color: Colo
 	)
 	announceTween:Play()
 end)
+
+-- Звуки
+local function makeSound(name: string, parent: Instance): Sound?
+	local info = Config.SOUNDS[name]
+	if not info or info.Id == "" then
+		return nil
+	end
+	local sound = Instance.new("Sound")
+	sound.SoundId = info.Id
+	sound.Volume = info.Volume or 1
+	sound.PlaybackSpeed = info.Speed or 1
+	sound.Parent = parent
+	return sound
+end
+
+local function playSound(name: string, position: Vector3?)
+	local parent: Instance = gui
+	local holder: Attachment? = nil
+	if position then
+		holder = Instance.new("Attachment")
+		holder.WorldPosition = position
+		holder.Parent = Workspace.Terrain
+		parent = holder :: Attachment
+	end
+	local sound = makeSound(name, parent)
+	if not sound then
+		if holder then
+			holder:Destroy()
+		end
+		return
+	end
+	if position then
+		sound.RollOffMaxDistance = 150
+	end
+	sound:Play()
+	task.delay(8, function()
+		if holder then
+			holder:Destroy()
+		else
+			sound:Destroy()
+		end
+	end)
+end
+
+Remotes.get("Sfx").OnClientEvent:Connect(function(name: string, position: Vector3?)
+	playSound(name, position)
+end)
+
+-- Музыка и болельщики играют по кругу
+local loops: { [string]: Sound } = {}
+for _, name in { "LobbyMusic", "RoundMusic", "Crowd" } do
+	local sound = makeSound(name, gui)
+	if sound then
+		sound.Looped = true
+		loops[name] = sound
+	end
+end
+local function setLoop(name: string, on: boolean)
+	local sound = loops[name]
+	if sound then
+		if on and not sound.IsPlaying then
+			sound:Play()
+		elseif not on and sound.IsPlaying then
+			sound:Stop()
+		end
+	end
+end
+
+-- Наблюдение
+local watching: Model? = nil
+local function candidates(): { Model }
+	local list = {}
+	for _, m in Workspace:GetChildren() do
+		if m:IsA("Model") and m ~= player.Character and m:GetAttribute("Participant") then
+			local role = m:GetAttribute("Role")
+			local humanoid = m:FindFirstChildOfClass("Humanoid")
+			if humanoid and (role == "Hider" or role == "Seeker" or role == "Jailed") then
+				table.insert(list, m)
+			end
+		end
+	end
+	return list
+end
+local function watch(step: number)
+	local list = candidates()
+	if #list == 0 then
+		watching = nil
+		return
+	end
+	local index = (watching and table.find(list, watching)) or 0
+	index = (index - 1 + step) % #list + 1
+	watching = list[index]
+end
+local function stopWatching()
+	watching = nil
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		Workspace.CurrentCamera.CameraSubject = humanoid
+	end
+end
+prevButton.Activated:Connect(function()
+	watch(-1)
+end)
+nextButton.Activated:Connect(function()
+	watch(1)
+end)
+watchButton.Activated:Connect(function()
+	if watching then
+		stopWatching()
+	else
+		watch(1)
+	end
+end)
+
+local nextBeatAt = 0
+local lastTickSecond = -1
 
 local ROLE_NAMES = {
 	Lobby = "Ты в ложе",
@@ -310,11 +458,66 @@ RunService.RenderStepped:Connect(function(dt)
 	elseif role == "Seeker" and carrier ~= "" then
 		statusLabel.Text = "Кубок у игрока! Лови его, пока он не забил!"
 		statusLabel.TextColor3 = RED
+	elseif player:GetAttribute("Prop") then
+		statusLabel.Text = "Ты — " .. string.lower(player:GetAttribute("Prop")) .. "! Замри, когда водящий рядом."
+		statusLabel.TextColor3 = Color3.fromRGB(255, 170, 60)
 	elseif player:GetAttribute("Boosted") then
 		statusLabel.Text = "Ускорение!"
 		statusLabel.TextColor3 = Color3.fromRGB(80, 255, 140)
 	else
 		statusLabel.Text = ""
+	end
+
+	-- Музыка
+	local inRound = phase == "Hiding" or phase == "Seeking"
+	setLoop("LobbyMusic", not inRound and role == "Lobby")
+	setLoop("RoundMusic", phase == "Seeking")
+	setLoop("Crowd", inRound or role ~= "Lobby")
+
+	-- Последние 10 секунд — тикают часы
+	if (phase == "Hiding" or phase == "Seeking") and left > 0 and left <= 10 then
+		local second = math.ceil(left)
+		if second ~= lastTickSecond then
+			lastTickSecond = second
+			playSound("Tick")
+		end
+	end
+
+	-- Сердцебиение
+	local seekerModel = gameState:FindFirstChild("SeekerModel") :: ObjectValue?
+	local seekerCharacter = seekerModel and seekerModel.Value :: Model?
+	local seekerRoot = seekerCharacter and seekerCharacter:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local closeness = 0
+	if role == "Hider" and phase == "Seeking" and seekerRoot and myRoot then
+		local d = (seekerRoot.Position - myRoot.Position).Magnitude
+		closeness = math.clamp(1 - d / Config.HEARTBEAT_DISTANCE, 0, 1)
+	end
+	if closeness > 0 and t >= nextBeatAt then
+		nextBeatAt = t + (1.1 - closeness * 0.75)
+		heartStroke.Transparency = 0.75 - closeness * 0.55
+		TweenService:Create(heartStroke, TweenInfo.new(0.35), { Transparency = 1 }):Play()
+		playSound("Heartbeat")
+	elseif closeness == 0 then
+		heartStroke.Transparency = 1
+	end
+
+	-- Наблюдение
+	local canWatch = role == "Jailed" or (role == "Lobby" and (phase == "Hiding" or phase == "Seeking"))
+	spectate.Visible = canWatch
+	if not canWatch and watching then
+		stopWatching()
+	end
+	if watching then
+		local humanoid = watching.Parent and watching:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			Workspace.CurrentCamera.CameraSubject = humanoid
+			watchButton.Text = "Смотришь: " .. watching.Name
+		else
+			watch(1)
+		end
+	else
+		watchButton.Text = "Смотреть за игроками"
 	end
 
 	-- Кнопки
@@ -327,6 +530,8 @@ RunService.RenderStepped:Connect(function(dt)
 		local kickText, kickReady = cooldownText("Мяч (F)", player:GetAttribute("KickReadyAt") or 0, t)
 		kickButton.Text = kickText
 		kickButton.BackgroundTransparency = if kickReady and phase == "Seeking" then 0 else 0.5
+		local prop = player:GetAttribute("Prop")
+		transformButton.Text = if prop then "Стать собой (E)" else "Предмет (E)"
 	end
 
 	local inLobby = role == "Lobby"

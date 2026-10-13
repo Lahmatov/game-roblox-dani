@@ -12,6 +12,8 @@ local Participants = require(script.Parent.Participants)
 local PlayerState = require(script.Parent.PlayerState)
 local Trophy = require(script.Parent.Trophy)
 local Abilities = require(script.Parent.Abilities)
+local Transform = require(script.Parent.Transform)
+local Sfx = require(script.Parent.Sfx)
 
 local Bots = {}
 
@@ -31,6 +33,7 @@ local PHRASES = {
 	caught = { "Ну во-о-от...", "Это нечестно!", "Я же спрятался!", "Спасите!" },
 	distracted = { "О, бабочка!", "Смотрите, птичка!", "Я танцую!", "Какой красивый газон!", "Апчхи!" },
 	trophy = { "У МЕНЯ КУБОК!", "Ура-а-а!", "Куда бежать?!" },
+	prop = { "Я просто мяч...", "Я конус. Честно!", "Меня тут нет", "Я бутылка водички", "Я урна, не смотри" },
 }
 local WALK_ANIMATION = "rbxassetid://507777826" -- стандартная анимация ходьбы R15
 local IDLE_ANIMATION = "rbxassetid://507766666" -- стандартная анимация стояния R15
@@ -505,7 +508,13 @@ local function thinkHider(brain: Brain, position: Vector3)
 		else
 			stop(brain)
 			if math.random() < level.TalkChance then
-				say(bot, "idle")
+				say(bot, if Transform.isTransformed(bot) then "prop" else "idle")
+			end
+			if not Transform.isTransformed(bot) and math.random() < level.TransformChance then
+				if Transform.transform(bot) then
+					Sfx.play("Transform", position)
+					say(bot, "prop")
+				end
 			end
 			-- Иногда посидевший бот тоже идёт искать
 			if brain.personality == "hider" and math.random() < 0.005 then
@@ -551,7 +560,11 @@ local function thinkSeeker(brain: Brain, position: Vector3)
 			local pPosition = PlayerState.getPosition(p)
 			if pPosition then
 				local d = distance(position, pPosition)
-				if d < bestDistance and (d < 15 or canSee(position, pPosition)) then
+				-- Предмет (конус, мяч...) бот замечает только совсем рядом
+				local limit = if Transform.isTransformed(p)
+					then math.min(bestDistance, Config.TRANSFORMED_SPOT_DISTANCE)
+					else bestDistance
+				if d < limit and (d < 15 or canSee(position, pPosition)) then
 					best, bestPosition, bestDistance = p, pPosition, d
 				end
 			end
@@ -621,11 +634,11 @@ function Bots.spawn()
 	nextId += 1
 	local name = "Бот " .. NAMES[(nextId - 1) % #NAMES + 1]
 	local bot = Participants.newBot(name, nextId)
-	bot:SetAttribute("Role", "Lobby")
 	local character = buildCharacter(name)
 	character:PivotTo(map.LobbyCFrame + Vector3.new(math.random(-15, 15), 3, math.random(-15, 15)))
 	character.Parent = Workspace
 	bot.Character = character
+	PlayerState.setRole(bot, "Lobby")
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if root then
 		pcall(function()
@@ -676,6 +689,7 @@ end
 function Bots.despawnAll()
 	for bot, brain in brains do
 		brain.alive = false
+		Transform.forget(bot)
 		if bot.Character then
 			bot.Character:Destroy()
 			bot.Character = nil

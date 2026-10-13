@@ -12,6 +12,8 @@ local Economy = require(script.Parent.Economy)
 local Abilities = require(script.Parent.Abilities)
 local Participants = require(script.Parent.Participants)
 local Bots = require(script.Parent.Bots)
+local Transform = require(script.Parent.Transform)
+local Sfx = require(script.Parent.Sfx)
 
 local RoundManager = {}
 
@@ -21,6 +23,7 @@ local GOLD = Color3.fromRGB(255, 210, 60)
 
 local map
 local gameState: Folder
+local seekerModel: ObjectValue
 local announceRemote: RemoteEvent
 local volunteers: { [Player]: boolean } = {}
 local lastSeeker: Player? = nil
@@ -180,6 +183,8 @@ local function jail(player: Player)
 		Trophy.drop()
 		announce(player.DisplayName .. " уронил Кубок!", GOLD)
 	end
+	Sfx.play("Catch", PlayerState.getPosition(player))
+	Transform.revert(player)
 	PlayerState.setRole(player, "Jailed")
 	PlayerState.teleport(player, jailCFrame())
 	if seeker then
@@ -194,8 +199,39 @@ local function release(rescuer: Player, prisoner: Player)
 	PlayerState.makeSafe(prisoner, Config.RESCUE_IMMUNITY)
 	PlayerState.teleport(prisoner, hiderSpawnCFrame())
 	Economy.addCoins(rescuer, Config.COINS.RESCUE)
+	Sfx.play("Rescue", PlayerState.getPosition(rescuer))
 	announce(rescuer.DisplayName .. " освободил " .. prisoner.DisplayName .. "!", HIDER_GREEN)
 	updateCounters()
+end
+
+-- Салют из конфетти и рёв стадиона
+local function celebrateGoal(position: Vector3)
+	Sfx.play("Goal")
+	Sfx.play("Cheer")
+	local holder = Instance.new("Part")
+	holder.Anchored = true
+	holder.CanCollide = false
+	holder.Transparency = 1
+	holder.Size = Vector3.new(1, 1, 1)
+	holder.Position = position + Vector3.new(0, 4, 0)
+	holder.Parent = game:GetService("Workspace")
+	local confetti = Instance.new("ParticleEmitter")
+	confetti.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 210, 60)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 170, 90)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+	})
+	confetti.Size = NumberSequence.new(0.4)
+	confetti.Speed = NumberRange.new(25, 45)
+	confetti.SpreadAngle = Vector2.new(60, 60)
+	confetti.Lifetime = NumberRange.new(2, 4)
+	confetti.Acceleration = Vector3.new(0, -20, 0)
+	confetti.Rate = 0
+	confetti.Parent = holder
+	confetti:Emit(300)
+	task.delay(6, function()
+		holder:Destroy()
+	end)
 end
 
 local function inGoal(position: Vector3): boolean
@@ -265,12 +301,15 @@ local function tick(): (string?, string?, Player?)
 	-- Кубок
 	local picked = Trophy.update(free)
 	if picked then
+		Transform.revert(picked) -- с Кубком над головой предметом не притворишься
+		Sfx.play("Trophy")
 		announce(picked.DisplayName .. " нашёл Кубок мира! Беги к воротам!", GOLD)
 	end
 	local carrier = Trophy.getCarrier()
 	if carrier then
 		local position = PlayerState.getPosition(carrier)
 		if position and inGoal(position) then
+			celebrateGoal(position)
 			return "Hiders", "ГООООЛ! " .. carrier.DisplayName .. " забил Кубок в ворота! Прячущиеся победили!", carrier
 		end
 	end
@@ -309,6 +348,8 @@ end
 local function endRound(winner: string?, reason: string, hero: Player?)
 	setPhase("End", Config.END_TIME)
 	Statues.disable()
+	Transform.revertAll()
+	seekerModel.Value = nil
 	announce(reason, if winner == "Seeker" then SEEKER_RED else HIDER_GREEN)
 
 	for _, player in hiders do
@@ -404,8 +445,10 @@ local function runRound()
 	setPhase("Seeking", Config.ROUND_TIME)
 	PlayerState.teleport(currentSeeker, map.SeekerReleaseCFrame)
 	addSeekerGear(currentSeeker)
+	seekerModel.Value = currentSeeker.Character
 	Trophy.spawn(map.TrophySpots)
 	Statues.enable()
+	Sfx.play("Whistle")
 	announce("Водящий вышел искать! Найдите Кубок мира и забейте его в ворота!", GOLD)
 
 	local lastCounters = 0
@@ -426,6 +469,8 @@ end
 local function onCharacterAdded(player: Player, _character: Model)
 	-- Подождать, пока персонаж загрузится, потом поставить на место по роли
 	task.wait(0.2)
+	Transform.forget(player)
+	PlayerState.syncCharacter(player)
 	local phase = gameState:GetAttribute("Phase")
 	if phase == "Hiding" or phase == "Seeking" then
 		local role = PlayerState.getRole(player)
@@ -433,7 +478,24 @@ local function onCharacterAdded(player: Player, _character: Model)
 			Trophy.drop()
 		end
 		placeByRole(player)
+		if role == "Seeker" and phase == "Seeking" then
+			seekerModel.Value = player.Character
+		end
 	end
+end
+
+-- Превратиться в предмет / стать собой (для людей и ботов)
+function RoundManager.toggleTransform(participant): boolean
+	local phase = gameState:GetAttribute("Phase")
+	local can = PlayerState.getRole(participant) == "Hider"
+		and (phase == "Hiding" or phase == "Seeking")
+		and Trophy.getCarrier() ~= participant
+		and not PlayerState.isFrozen(participant)
+	local changed = Transform.toggle(participant, can)
+	if changed then
+		Sfx.play("Transform", PlayerState.getPosition(participant))
+	end
+	return changed
 end
 
 function RoundManager.start(builtMap)
@@ -441,6 +503,9 @@ function RoundManager.start(builtMap)
 
 	gameState = Instance.new("Folder")
 	gameState.Name = "GameState"
+	seekerModel = Instance.new("ObjectValue")
+	seekerModel.Name = "SeekerModel" -- персонаж водящего: по нему стучит сердце
+	seekerModel.Parent = gameState
 	gameState.Parent = ReplicatedStorage
 	announceRemote = Remotes.get("Announce")
 
@@ -480,6 +545,10 @@ function RoundManager.start(builtMap)
 		if lastSeeker == player then
 			lastSeeker = nil
 		end
+	end)
+
+	Remotes.get("Transform").OnServerEvent:Connect(function(player)
+		RoundManager.toggleTransform(player)
 	end)
 
 	Remotes.get("Volunteer").OnServerEvent:Connect(function(player, wants)

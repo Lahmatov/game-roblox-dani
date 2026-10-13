@@ -702,12 +702,25 @@ end
 -- Sound
 function methods.Play(self)
 	data[self].props.Playing = true
+	data[self].props.IsPlaying = true
 end
 -- RemoteEvent
 function methods.FireServer(self, ...)
 	self.OnServerEvent:Fire(Mock.localPlayer, ...)
 end
+Mock.sfx = {}
+Mock.emitted = 0
+function methods.Emit(_self, count)
+	Mock.emitted += count
+end
+function methods.Stop(self)
+	data[self].props.IsPlaying = false
+end
 function methods.FireAllClients(self, ...)
+	if self.Name == "Sfx" then
+		local name = ...
+		Mock.sfx[name] = (Mock.sfx[name] or 0) + 1
+	end
 	if self.Name == "Announce" then
 		local text = ...
 		table.insert(Mock.announcements, { t = now - 1000, text = text })
@@ -861,14 +874,22 @@ function methods.AddItem(_self, item, lifetime)
 	end)
 end
 -- TweenService
-function methods.Create(_self, inst, _info, goals)
+function methods.Create(_self, inst, info, goals)
+	local cancelled = false
 	return {
 		Play = function()
-			for k, v in goals do
-				inst[k] = v
-			end
+			-- Как в Roblox: значения доходят до цели к концу анимации
+			task.delay(info.Time or 0, function()
+				if not cancelled then
+					for k, v in goals do
+						inst[k] = v
+					end
+				end
+			end)
 		end,
-		Cancel = function() end,
+		Cancel = function()
+			cancelled = true
+		end,
 	}
 end
 
@@ -877,6 +898,9 @@ local camera = new("Camera")
 data[camera].props.CFrame = CFrame.new()
 camera.Parent = workspace
 workspace.CurrentCamera = camera
+local terrain = new("Terrain")
+data[terrain].Name = "Terrain"
+terrain.Parent = workspace
 for _, name in { "Players", "ReplicatedStorage", "ServerScriptService", "StarterPlayer", "Lighting", "RunService" } do
 	makeService(name)
 end
@@ -928,6 +952,11 @@ G = setmetatable({
 	UDim2 = UDim2,
 	TweenInfo = TweenInfo,
 	RaycastParams = RaycastParams,
+	ColorSequence = { new = function(...) return { ... } end },
+	ColorSequenceKeypoint = { new = function(...) return { ... } end },
+	NumberSequence = { new = function(...) return { ... } end },
+	NumberRange = { new = function(...) return { ... } end },
+	Vector2 = { new = function(x, y) return { X = x, Y = y } end },
 	Enum = Enum,
 	task = task,
 	typeof = mockTypeof,

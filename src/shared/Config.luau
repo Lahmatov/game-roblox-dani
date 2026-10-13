@@ -30,6 +30,7 @@ Config.BOT_LEVELS = {
 		OpenHideChance = 0.5, -- шанс «спрятаться» прямо посреди поля
 		DistractChance = 0.06, -- шанс отвлечься и пойти куда-то не туда
 		TalkChance = 0.04, -- шанс сказать глупость
+		TransformChance = 0.08, -- шанс превратиться в предмет (и всё равно ходить туда-сюда)
 		SearchDelayMin = 90, -- когда начинают искать Кубок
 		SearchDelayMax = 240,
 		TrophySight = 8, -- замечают Кубок, только если почти наступили на него
@@ -50,6 +51,7 @@ Config.BOT_LEVELS = {
 		OpenHideChance = 0,
 		DistractChance = 0,
 		TalkChance = 0.01,
+		TransformChance = 0.04,
 		SearchDelayMin = 45,
 		SearchDelayMax = 150,
 		TrophySight = 15,
@@ -104,6 +106,35 @@ Config.STATUE_TOUCH_DISTANCE = 4.5
 Config.STATUE_FREEZE = 2
 Config.STATUE_BOOST_TIME = 5
 Config.STATUE_BOOST_BONUS = 10
+
+-- Превращение в предметы (конус, мяч, бутылка, урна)
+Config.TRANSFORM_COOLDOWN = 3 -- как часто можно превращаться
+Config.TRANSFORMED_SPOT_DISTANCE = 10 -- бот-водящий замечает предмет только вблизи
+
+-- Сердцебиение: чем ближе водящий, тем чаще стучит сердце
+Config.HEARTBEAT_DISTANCE = 45
+
+-- Звуки. "rbxasset://sounds/..." — звуки, встроенные в Roblox, они работают всегда.
+-- Пустые ("") — впиши номер звука из Creator Store: "rbxassetid://НОМЕР".
+-- Бесплатные звуки и музыку от Roblox можно найти в Studio: Toolbox -> Audio,
+-- лучше брать те, где автор — Roblox (их можно использовать в любой игре).
+Config.SOUNDS = {
+	Whistle = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 1, Speed = 0.7 }, -- начало поисков
+	Goal = { Id = "rbxasset://sounds/victory.wav", Volume = 1 }, -- гол
+	Catch = { Id = "rbxasset://sounds/uuhhh.mp3", Volume = 0.9 }, -- кого-то поймали
+	Rescue = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.8, Speed = 1.5 }, -- освободили
+	Trophy = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 1, Speed = 1.2 }, -- нашли Кубок
+	Kick = { Id = "rbxasset://sounds/swordlunge.wav", Volume = 0.8 },
+	Dash = { Id = "rbxasset://sounds/swordlunge.wav", Volume = 0.6, Speed = 1.6 },
+	Transform = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Speed = 2 },
+	Tick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.6 }, -- последние 10 секунд
+	Statue = { Id = "", Volume = 1 }, -- статуи ожили
+	Heartbeat = { Id = "", Volume = 0.8 }, -- стук сердца (без звука край экрана всё равно мигает)
+	LobbyMusic = { Id = "", Volume = 0.3 }, -- музыка в лобби
+	RoundMusic = { Id = "", Volume = 0.2 }, -- музыка во время поисков
+	Crowd = { Id = "", Volume = 0.4 }, -- гул болельщиков на стадионе
+	Cheer = { Id = "", Volume = 1 }, -- болельщики кричат на гол
+}
 
 -- Монеты
 Config.COINS = {
