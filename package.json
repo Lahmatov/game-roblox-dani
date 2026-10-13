@@ -1,0 +1,12 @@
+{
+  "name": "pryatki-za-kubok",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/run-playtest.mjs"
+  },
+  "devDependencies": {
+    "luau-web": "1.5.1",
+    "three": "^0.170.0"
+  }
+}

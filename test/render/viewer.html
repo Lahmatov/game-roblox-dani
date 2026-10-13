@@ -1,0 +1,148 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Stadium preview</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js"}}</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three'
+
+const q = new URLSearchParams(location.search)
+const VIEW = q.get('view') || 'aerial'
+const NIGHT = (q.get('mode') || 'night') === 'night'
+const W = window.innerWidth || 1280, H = window.innerHeight || 720
+const scene = await (await fetch(q.get('scene') || '/build/preview/scene.json')).json()
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
+renderer.setSize(W, H)
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = NIGHT ? 0.85 : 1.0
+renderer.shadowMap.enabled = !NIGHT
+renderer.shadowMap.type = THREE.PCFSoftShadowMap
+document.body.appendChild(renderer.domElement)
+
+const world = new THREE.Scene()
+world.background = new THREE.Color(NIGHT ? 0x0b1020 : 0x9cc8f0)
+world.fog = new THREE.Fog(NIGHT ? 0x0b1020 : 0xbfd8f0, 250, 900)
+
+const mats = {}
+function material(m, c, t) {
+  const key = m + c.join(',') + t
+  if (mats[key]) return mats[key]
+  const color = new THREE.Color(c[0], c[1], c[2])
+  color.convertSRGBToLinear()
+  const p = { color, roughness: 0.6, metalness: 0 }
+  if (m === 'Metal' || m === 'DiamondPlate') { p.metalness = 0.75; p.roughness = 0.35 }
+  if (m === 'Foil') { p.metalness = 1; p.roughness = 0.18 }
+  if (m === 'Grass' || m === 'Concrete' || m === 'Slate' || m === 'Fabric') p.roughness = 0.95
+  if (m === 'Marble' || m === 'SmoothPlastic' || m === 'Glass') p.roughness = 0.25
+  if (m === 'Neon') { p.emissive = color.clone(); p.emissiveIntensity = NIGHT ? 3 : 1.2 }
+  if (t > 0 || m === 'Glass') { p.transparent = true; p.opacity = Math.max(0.08, 1 - (m === 'Glass' ? Math.max(t, 0.4) : t)) ; p.depthWrite = false }
+  return (mats[key] = new THREE.MeshStandardMaterial(p))
+}
+
+function wedge(x, y, z) {
+  const g = new THREE.BufferGeometry()
+  const hx = x / 2, hy = y / 2, hz = z / 2
+  // Roblox WedgePart: низ — прямоугольник, высокое ребро сзади (+Z), склон к переду (-Z)
+  const v = [
+    [-hx, -hy, -hz], [hx, -hy, -hz], [hx, -hy, hz], [-hx, -hy, hz], // низ
+    [-hx, hy, hz], [hx, hy, hz], // верх сзади
+  ]
+  const f = [[0, 2, 1], [0, 3, 2], [3, 4, 5], [3, 5, 2], [0, 1, 5], [0, 5, 4], [0, 4, 3], [1, 2, 5]]
+  const pos = []
+  for (const tri of f) for (const i of tri) pos.push(...v[i])
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.computeVertexNormals()
+  return g
+}
+
+function matrix(cf) {
+  const m = new THREE.Matrix4()
+  m.set(cf[3], cf[4], cf[5], cf[0], cf[6], cf[7], cf[8], cf[1], cf[9], cf[10], cf[11], cf[2], 0, 0, 0, 1)
+  return m
+}
+
+const lights = []
+for (const it of scene.items) {
+  if (it.k === 'SpotLight' || it.k === 'PointLight' || it.k === 'SurfaceLight') { lights.push(it); continue }
+  if (it.k === 'Text') {
+    const [sx, sy] = it.z
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(64, Math.round(sx * 24)); canvas.height = Math.max(32, Math.round(sy * 24))
+    const g = canvas.getContext('2d')
+    if (it.bt < 1) { g.fillStyle = `rgb(${it.bg.map(v => v * 255).join(',')})`; g.fillRect(0, 0, canvas.width, canvas.height) }
+    g.fillStyle = `rgb(${it.c.map(v => v * 255).join(',')})`
+    const lines = it.x.split('\n')
+    const fs = Math.min(canvas.height / lines.length * 0.75, canvas.width / Math.max(...lines.map(l => l.length)) * 1.6)
+    g.font = `bold ${fs}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'
+    lines.forEach((l, i) => g.fillText(l, canvas.width / 2, canvas.height * (i + 0.5) / lines.length))
+    const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(sx, sy), new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false }))
+    const front = it.f !== 'Back'
+    plane.position.set(0, 0, (front ? -1 : 1) * (it.z[2] / 2 + 0.03))
+    if (front) plane.rotation.y = Math.PI
+    const holder = new THREE.Object3D()
+    holder.applyMatrix4(matrix(it.cf)); holder.add(plane); world.add(holder)
+    continue
+  }
+  if (it.t >= 0.99) continue
+  const [sx, sy, sz] = it.z
+  let geo
+  if (it.k === 'WedgePart') geo = wedge(sx, sy, sz)
+  else if (it.s === 'Ball') geo = new THREE.SphereGeometry(sx / 2, 20, 14)
+  else if (it.s === 'Cylinder') { geo = new THREE.CylinderGeometry(sy / 2, sy / 2, sx, 20); geo.rotateZ(Math.PI / 2) }
+  else geo = new THREE.BoxGeometry(sx, sy, sz)
+  const mesh = new THREE.Mesh(geo, material(it.m, it.c, it.t))
+  mesh.applyMatrix4(matrix(it.cf))
+  mesh.castShadow = it.t < 0.3; mesh.receiveShadow = true
+  world.add(mesh)
+  if (it.k === 'TrussPart') {
+    const e = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x222222 }))
+    e.applyMatrix4(matrix(it.cf)); world.add(e)
+  }
+}
+
+if (NIGHT) {
+  world.add(new THREE.HemisphereLight(0x6a78a8, 0x202630, 0.9))
+  const moon = new THREE.DirectionalLight(0x8090c0, 0.25); moon.position.set(-200, 300, 100); world.add(moon)
+  lights.sort((a, b) => b.r * b.b - a.r * a.b)
+  for (const l of lights.slice(0, 64)) {
+    const color = new THREE.Color(l.c[0], l.c[1], l.c[2])
+    const m = matrix(l.cf); const pos = new THREE.Vector3().setFromMatrixPosition(m)
+    if (l.k === 'PointLight') {
+      const p = new THREE.PointLight(color, l.b * l.r * 3, l.r * 1.4, 1.4); p.position.copy(pos); world.add(p)
+    } else {
+      const dir = { Bottom: [0, -1, 0], Top: [0, 1, 0], Front: [0, 0, -1], Back: [0, 0, 1], Left: [-1, 0, 0], Right: [1, 0, 0] }[l.f] || [0, 0, -1]
+      const d = new THREE.Vector3(...dir).transformDirection(m)
+      const s = new THREE.SpotLight(color, l.b * l.r * 6, l.r * 1.8, THREE.MathUtils.degToRad(Math.min(89, (l.a || 90) / 2)), 0.5, 1.2)
+      s.position.copy(pos); s.target.position.copy(pos.clone().add(d)); world.add(s); world.add(s.target)
+    }
+  }
+} else {
+  world.add(new THREE.HemisphereLight(0xdfefff, 0x445533, 1.0))
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(-180, 260, 140)
+  sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096)
+  Object.assign(sun.shadow.camera, { left: -260, right: 260, top: 260, bottom: -260, near: 1, far: 900 })
+  world.add(sun)
+}
+
+const VIEWS = {
+  aerial: [[0, 300, -420], [0, 0, 20], 50],
+  fanzone: [[0, 120, -420], [0, 0, -200], 60],
+  center: [[0, 70, -60], [0, 0, 5], 60],
+  broadcast: [[0, 30, 122], [0, 0, -30], 58],
+  goal: [[-127, 10, 0], [0, 3, 0], 60],
+  pitch: [[35, 5, 25], [130, 18, -10], 65],
+  stand: [[-60, 23, 124], [-20, 8, 60], 65],
+  tunnel: [[0, 5, 66], [0, 4, 130], 60],
+  dressing: [[-8, 6, 136], [-29, 3, 152], 70],
+  lobby: [[0, 256, -624], [0, 252, -675], 70],
+  jail: [[-104, 9, 62], [-124, 3, 45], 55],
+  outside: [[160, 30, 260], [0, 20, 100], 55],
+}
+const [p, t, fov] = VIEWS[VIEW] || VIEWS.aerial
+const camera = new THREE.PerspectiveCamera(fov, W / H, 0.5, 2000)
+camera.position.set(...p); camera.lookAt(...t)
+renderer.render(world, camera)
+document.title = 'done'
+</script></body></html>
