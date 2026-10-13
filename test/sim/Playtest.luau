@@ -712,7 +712,13 @@ for _, m in botCharacters() do
 	end
 end
 Mock.advance(1)
-check(dumbSeeker and dumbSeeker.Humanoid.WalkSpeed == Config.SEEKER_SPEED + Config.BOT_LEVELS.dumb.SeekerSpeedBonus, "глупый бот-водящий медленный (" .. tostring(dumbSeeker and dumbSeeker.Humanoid.WalkSpeed) .. ")")
+if role(dani) == "Seeker" then
+	-- Водящего выбрал случай, и это Даня — тогда проверяем глупых прячущихся
+	local someBot = botCharacters()[1]
+	check(someBot and someBot.Humanoid.WalkSpeed == Config.HIDER_SPEED + Config.BOT_LEVELS.dumb.HiderSpeedBonus, "водит Даня; глупые боты-прячущиеся медленные (" .. tostring(someBot and someBot.Humanoid.WalkSpeed) .. ")")
+else
+	check(dumbSeeker and dumbSeeker.Humanoid.WalkSpeed == Config.SEEKER_SPEED + Config.BOT_LEVELS.dumb.SeekerSpeedBonus, "глупый бот-водящий медленный (" .. tostring(dumbSeeker and dumbSeeker.Humanoid.WalkSpeed) .. ")")
+end
 -- Даня стоит на виду; глупый водящий, даже если увидит, быстро сдаётся
 teleport(dani, V(0, 0, -50))
 Mock.advance(60)
