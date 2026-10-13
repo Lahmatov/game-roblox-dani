@@ -995,5 +995,12 @@ for _, w in Mock.warnings do
 	print("  предупреждение: " .. tostring(w))
 end
 check(#Mock.errors == 0, "за весь плейтест не было ни одной ошибки в скриптах")
+local buildWarnings = 0
+for _, w in Mock.warnings do
+	if string.find(tostring(w), "Не получилось", 1, true) then
+		buildWarnings += 1
+	end
+end
+check(buildWarnings == 0, "стадион, фан-зона и украшения построились без ошибок")
 print(string.format("\nПройдено: %d, провалено: %d", passed, failed))
 return failed

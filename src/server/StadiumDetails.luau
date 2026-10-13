@@ -363,15 +363,39 @@ local function buildRulesBoard(root: Instance, o)
 	pad.Parent = label
 end
 
+-- Каждое украшение строится отдельно: если одно сломается, стадион и игра всё равно работают
+local function safely(name: string, fn: () -> ...any): ...any
+	local results = table.pack(pcall(fn))
+	if not results[1] then
+		warn("Не получилось построить «" .. name .. "»:", results[2])
+		return nil
+	end
+	return table.unpack(results, 2, results.n)
+end
+
 function StadiumDetails.build(root: Instance, o)
-	buildMarkings(root, o)
-	local labels = buildAdBoards(root, o)
-	buildFloodlights(root, o)
-	buildStandDressing(root, o)
-	buildSurroundings(root, o)
-	buildRulesBoard(root, o)
-	local hide, trophy = FanZone.build(root, o)
-	return { AdBoards = labels, HideSpots = hide, TrophySpots = trophy }
+	safely("разметку", function()
+		buildMarkings(root, o)
+	end)
+	local labels = safely("рекламные бортики", function()
+		return buildAdBoards(root, o)
+	end) or {}
+	safely("прожекторы", function()
+		buildFloodlights(root, o)
+	end)
+	safely("крышу и фасад", function()
+		buildStandDressing(root, o)
+	end)
+	safely("площадь и город", function()
+		buildSurroundings(root, o)
+	end)
+	safely("доску правил", function()
+		buildRulesBoard(root, o)
+	end)
+	local hide, trophy = safely("фан-зону", function()
+		return FanZone.build(root, o)
+	end)
+	return { AdBoards = labels, HideSpots = hide or {}, TrophySpots = trophy or {} }
 end
 
 -- Бегущая реклама: тексты на бортиках сменяются

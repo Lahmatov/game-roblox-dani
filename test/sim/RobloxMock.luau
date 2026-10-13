@@ -541,8 +541,36 @@ IMt.__index = function(obj, k)
 	return default(d, k)
 end
 
+-- Для редких классов проверяем имена свойств, как настоящий Roblox: опечатка — ошибка
+local STRICT = {
+	ParticleEmitter = { "Color", "Size", "Speed", "SpreadAngle", "Lifetime", "Acceleration", "Rate", "LightEmission", "EmissionDirection", "Texture", "Transparency", "Enabled", "Rotation", "RotSpeed", "Drag", "LockedToPart", "Shape", "ZOffset", "Brightness", "Name", "Parent" },
+	Trail = { "Attachment0", "Attachment1", "Color", "Lifetime", "LightEmission", "Transparency", "WidthScale", "Texture", "Enabled", "FaceCamera", "MinLength", "Name", "Parent" },
+	AngularVelocity = { "Attachment0", "Attachment1", "AngularVelocity", "MaxTorque", "RelativeTo", "Enabled", "ReactionTorqueEnabled", "Name", "Parent" },
+	ProximityPrompt = { "ActionText", "ObjectText", "HoldDuration", "MaxActivationDistance", "KeyboardKeyCode", "GamepadKeyCode", "RequiresLineOfSight", "Enabled", "Style", "UIOffset", "Name", "Parent" },
+	Atmosphere = { "Density", "Offset", "Color", "Decay", "Glare", "Haze", "Name", "Parent" },
+	BloomEffect = { "Intensity", "Size", "Threshold", "Enabled", "Name", "Parent" },
+	ColorCorrectionEffect = { "Brightness", "Contrast", "Saturation", "TintColor", "Enabled", "Name", "Parent" },
+	SunRaysEffect = { "Intensity", "Spread", "Enabled", "Name", "Parent" },
+	Sky = { "StarCount", "CelestialBodiesShown", "SkyboxBk", "SkyboxDn", "SkyboxFt", "SkyboxLf", "SkyboxRt", "SkyboxUp", "SunAngularSize", "MoonAngularSize", "SunTextureId", "MoonTextureId", "Name", "Parent" },
+	UIStroke = { "Color", "Thickness", "Transparency", "ApplyStrokeMode", "LineJoinMode", "Enabled", "Name", "Parent" },
+	Texture = { "Texture", "Face", "StudsPerTileU", "StudsPerTileV", "OffsetStudsU", "OffsetStudsV", "Transparency", "Color3", "Name", "Parent" },
+	SpotLight = { "Face", "Angle", "Range", "Brightness", "Color", "Shadows", "Enabled", "Name", "Parent" },
+	PointLight = { "Range", "Brightness", "Color", "Shadows", "Enabled", "Name", "Parent" },
+}
+for className, list in STRICT do
+	local set = {}
+	for _, name in list do
+		set[name] = true
+	end
+	STRICT[className] = set
+end
+
 IMt.__newindex = function(obj, k, v)
 	local d = data[obj]
+	local strict = STRICT[d.ClassName]
+	if strict and not strict[k] then
+		error(tostring(k) .. " is not a valid member of " .. d.ClassName .. " \"" .. d.Name .. "\"", 2)
+	end
 	if k == "Parent" then
 		if d.destroyed then
 			error("The Parent property of " .. d.Name .. " is locked", 2)

@@ -303,7 +303,7 @@ local function fountain(parent: Instance, cf: CFrame)
 	splash.Lifetime = NumberRange.new(1, 1.5)
 	splash.Acceleration = Vector3.new(0, -25, 0)
 	splash.Rate = 40
-	splash.EmitDirection = Enum.NormalId.Right
+	splash.EmissionDirection = Enum.NormalId.Right
 	splash.Parent = column
 end
 
@@ -439,9 +439,24 @@ end
 
 function FanZone.build(root: Instance, o)
 	local hide, trophy = {}, {}
-	buildSportingDecor(root, o)
-	buildPitchProps(root, o, hide)
-	buildFanZone(root, o, hide, trophy)
+	for name, fn in
+		{
+			["символику «Спортинга»"] = function()
+				buildSportingDecor(root, o)
+			end,
+			["вышки и ящики"] = function()
+				buildPitchProps(root, o, hide)
+			end,
+			["фан-зону"] = function()
+				buildFanZone(root, o, hide, trophy)
+			end,
+		}
+	do
+		local ok, err = pcall(fn)
+		if not ok then
+			warn("Не получилось построить «" .. name .. "»:", err)
+		end
+	end
 	return hide, trophy
 end
 
