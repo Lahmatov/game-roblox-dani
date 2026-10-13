@@ -230,6 +230,48 @@ volunteerButton.Activated:Connect(function()
 	Remotes.get("Volunteer"):FireServer(not player:GetAttribute("Volunteer"))
 end)
 
+-- «Как играть» — показываем, когда игрок зашёл
+local rules = Instance.new("Frame")
+rules.Size = UDim2.new(0, 520, 0, 380)
+rules.Position = UDim2.new(0.5, -260, 0.5, -190)
+rules.BackgroundColor3 = DARK
+rules.BackgroundTransparency = 0.05
+rules.ZIndex = 10
+rules.Parent = gui
+corner(rules, 16)
+local rulesStroke = Instance.new("UIStroke")
+rulesStroke.Color = GOLD
+rulesStroke.Thickness = 3
+rulesStroke.Parent = rules
+local rulesTitle = label(rules, "🏆 ПРЯТКИ ЗА КУБОК", UDim2.new(1, -32, 0, 50), UDim2.fromOffset(16, 10))
+rulesTitle.TextColor3 = GOLD
+rulesTitle.ZIndex = 11
+local rulesText = label(
+	rules,
+	table.concat({
+		"• Водящий ищет, остальные прячутся на стадионе.",
+		"• Найди Кубок мира и забей его в любые ворота — победа!",
+		"• Пойманных друзей освобождай касанием через решётку тюрьмы.",
+		"• Если время кончится или поймают всех — побеждает водящий.",
+		"",
+		"Q — рывок     F — мяч в водящего",
+		"E — стать предметом     T — дразнилка",
+	}, "\n"),
+	UDim2.new(1, -40, 0, 230),
+	UDim2.fromOffset(20, 66)
+)
+rulesText.TextScaled = false
+rulesText.TextSize = 20
+rulesText.TextWrapped = true
+rulesText.TextXAlignment = Enum.TextXAlignment.Left
+rulesText.TextYAlignment = Enum.TextYAlignment.Top
+rulesText.ZIndex = 11
+local rulesOk = button(rules, "Понятно, играем!", UDim2.new(0, 260, 0, 54), UDim2.new(0.5, -130, 1, -70), GREEN)
+rulesOk.ZIndex = 11
+rulesOk.Activated:Connect(function()
+	rules.Visible = false
+end)
+
 -- Действия
 local function dash()
 	Remotes.get("Dash"):FireServer()

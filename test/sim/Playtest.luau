@@ -162,7 +162,7 @@ Mock.runScript(playerScripts.Main, "client")
 Mock.advance(0.5)
 check(#Mock.errors == 0, "экран игрока (клиент) запустился без ошибок")
 check(dani.PlayerGui:FindFirstChild("PryatkiUI") ~= nil, "у Дани появился экран игры")
-check(role(ana) == "Lobby" and pos(ana).Y > 150, "игроки ждут в стеклянной ложе над стадионом")
+check(role(ana) == "Lobby" and pos(ana).Y > 150, "игроки ждут в стеклянной ложе")
 check(dani.leaderstats["Монеты"].Value == 0, "у новичка 0 монет")
 check(phase() == "Intermission", "4 игрока — пошёл отсчёт до раунда")
 

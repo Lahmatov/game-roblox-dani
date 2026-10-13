@@ -210,6 +210,31 @@ local TweenInfo = {
 		return { Time = time or 1, Args = { ... } }
 	end,
 }
+-- Random.new(seed): простой генератор, повторяемый при одинаковом seed
+local Random = {
+	new = function(seed)
+		local state = (seed or 1) % 2147483647
+		if state <= 0 then
+			state += 2147483646
+		end
+		local function nextRaw()
+			state = (state * 16807) % 2147483647
+			return state / 2147483647
+		end
+		return {
+			NextNumber = function(_, a, b)
+				local r = nextRaw()
+				if a == nil then
+					return r
+				end
+				return a + (b - a) * r
+			end,
+			NextInteger = function(_, a, b)
+				return a + math.floor(nextRaw() * (b - a + 1))
+			end,
+		}
+	end,
+}
 local RaycastParams = {
 	new = function()
 		return {}
@@ -952,6 +977,7 @@ G = setmetatable({
 	UDim2 = UDim2,
 	TweenInfo = TweenInfo,
 	RaycastParams = RaycastParams,
+	Random = Random,
 	ColorSequence = { new = function(...) return { ... } end },
 	ColorSequenceKeypoint = { new = function(...) return { ... } end },
 	NumberSequence = { new = function(...) return { ... } end },

@@ -4,6 +4,22 @@
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 
+local StadiumDetails = require(script.Parent.StadiumDetails)
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+
+-- Текстура газона поверх цвета (если загружена)
+local function grassTexture(p: BasePart)
+	if Config.TEXTURES.Grass > 0 then
+		local texture = Instance.new("Texture")
+		texture.Texture = "rbxassetid://" .. Config.TEXTURES.Grass
+		texture.Face = Enum.NormalId.Top
+		texture.StudsPerTileU = 24
+		texture.StudsPerTileV = 24
+		texture.Transparency = 0.35
+		texture.Parent = p
+	end
+end
+
 local StadiumBuilder = {}
 
 -- Размеры поля (в студах). Центр поля — точка (0, 0, 0).
@@ -35,6 +51,16 @@ local GRASS_LIGHT = Color3.fromRGB(72, 145, 62)
 local CONCRETE = Color3.fromRGB(150, 150, 155)
 local DARK = Color3.fromRGB(45, 45, 50)
 local STATUE_STONE = Color3.fromRGB(163, 162, 165)
+local SEAT_COLORS = {
+	Color3.fromRGB(0, 133, 75), -- зелёный
+	Color3.fromRGB(0, 133, 75),
+	Color3.fromRGB(110, 190, 70), -- салатовый
+	Color3.fromRGB(250, 205, 20), -- жёлтый
+	Color3.fromRGB(240, 240, 240), -- белый
+	Color3.fromRGB(30, 110, 180), -- синий
+	Color3.fromRGB(230, 120, 30), -- оранжевый
+}
+local mosaic = Random.new(7) -- одна и та же мозаика при каждом запуске
 
 local function make(className: string, parent: Instance, cf: CFrame, size: Vector3, color: Color3, material: Enum.Material?): BasePart
 	local p = Instance.new(className) :: BasePart
@@ -76,25 +102,63 @@ local function line(parent: Instance, a: Vector3, b: Vector3)
 	deco(parent, CFrame.lookAt(mid, b), Vector3.new(1, 0.2, length + 1), WHITE)
 end
 
+local function lightingEffect(className: string, props: { [string]: any })
+	local old = Lighting:FindFirstChildOfClass(className)
+	if old then
+		old:Destroy()
+	end
+	local effect = Instance.new(className)
+	for k, v in props do
+		(effect :: any)[k] = v
+	end
+	effect.Parent = Lighting
+	return effect
+end
+
+-- Вечерний матч: тёмно-синее небо со звёздами, лёгкая дымка, свечение прожекторов.
+-- Самое красивое освещение (Future) включается в default.project.json — скриптом его не поменять.
 local function setupLighting()
-	Lighting.ClockTime = 19.8 -- вечер
-	Lighting.Brightness = 1
-	Lighting.Ambient = Color3.fromRGB(70, 70, 85)
-	Lighting.OutdoorAmbient = Color3.fromRGB(95, 95, 115)
-	Lighting.FogColor = Color3.fromRGB(25, 30, 45)
-	Lighting.FogStart = 150
-	Lighting.FogEnd = 600
+	Lighting.ClockTime = 20.3
+	Lighting.Brightness = 2
+	Lighting.Ambient = Color3.fromRGB(38, 42, 56)
+	Lighting.OutdoorAmbient = Color3.fromRGB(78, 84, 108)
+	Lighting.EnvironmentDiffuseScale = 1
+	Lighting.EnvironmentSpecularScale = 1
+	Lighting.ExposureCompensation = 0.15
 	Lighting.GlobalShadows = true
+	local sky = lightingEffect("Sky", { StarCount = 3000, CelestialBodiesShown = true })
+	local faces = Config.TEXTURES.Sky
+	if faces.Bk > 0 then
+		for _, face in { "Bk", "Dn", "Ft", "Lf", "Rt", "Up" } do
+			(sky :: any)["Skybox" .. face] = "rbxassetid://" .. faces[face]
+		end
+	end
+	lightingEffect("Atmosphere", {
+		Density = 0.32,
+		Offset = 0.2,
+		Color = Color3.fromRGB(105, 115, 150),
+		Decay = Color3.fromRGB(50, 60, 95),
+		Glare = 0.3,
+		Haze = 1.4,
+	})
+	lightingEffect("BloomEffect", { Intensity = 0.7, Size = 28, Threshold = 1.4 })
+	lightingEffect("ColorCorrectionEffect", {
+		Brightness = 0.02,
+		Contrast = 0.1,
+		Saturation = 0.12,
+		TintColor = Color3.fromRGB(255, 250, 240),
+	})
+	lightingEffect("SunRaysEffect", { Intensity = 0.02, Spread = 0.6 })
 end
 
 local function buildPitch(root: Instance)
 	local m = folder("Pitch", root)
-	box(m, CFrame.new(0, -1, 0), Vector3.new(GROUND_X * 2, 2, GROUND_Z * 2), GRASS, Enum.Material.Grass)
+	grassTexture(box(m, CFrame.new(0, -1, 0), Vector3.new(GROUND_X * 2, 2, GROUND_Z * 2), GRASS, Enum.Material.Grass))
 
-	-- Полосы газона
+	-- Полосы газона (как после стрижки)
 	for i = 0, 10 do
 		if i % 2 == 0 then
-			deco(m, CFrame.new(-FIELD_X + 10 + i * 20, 0.05, 0), Vector3.new(20, 0.1, FIELD_Z * 2), GRASS_LIGHT, Enum.Material.Grass)
+			grassTexture(deco(m, CFrame.new(-FIELD_X + 10 + i * 20, 0.05, 0), Vector3.new(20, 0.1, FIELD_Z * 2), GRASS_LIGHT, Enum.Material.Grass))
 		end
 	end
 
@@ -158,9 +222,31 @@ local function buildGoal(root: Instance, s: number)
 	box(m, CFrame.new(x, h + 0.5, 0), Vector3.new(1, 1, w * 2 + 2), WHITE, Enum.Material.Metal)
 
 	-- Сетка
+	-- Сетка: невидимая стенка (чтобы мяч и игроки не проходили) и нитки клеточкой
 	local function net(cf: CFrame, size: Vector3)
-		local p = box(m, cf, size, WHITE, Enum.Material.Fabric)
-		p.Transparency = 0.55
+		local wall = box(m, cf, size, WHITE, Enum.Material.Fabric)
+		wall.Transparency = 1
+		local thin = math.min(size.X, size.Y, size.Z)
+		local axes = {}
+		for _, axis in { "X", "Y", "Z" } do
+			if size[axis] > thin then
+				table.insert(axes, axis)
+			end
+		end
+		local function unit(axis: string): Vector3
+			return Vector3.new(if axis == "X" then 1 else 0, if axis == "Y" then 1 else 0, if axis == "Z" then 1 else 0)
+		end
+		for i, along in axes do
+			local across = axes[3 - i]
+			local length = size[along]
+			local span = size[across]
+			local count = math.floor(span / 1)
+			for k = 0, count do
+				local offset = unit(across) * (-span / 2 + k * span / count)
+				local lineSize = unit(along) * length + Vector3.new(0.06, 0.06, 0.06)
+				deco(m, cf + offset, lineSize, Color3.fromRGB(235, 235, 235), Enum.Material.Fabric)
+			end
+		end
 	end
 	net(CFrame.new(back, h / 2, 0), Vector3.new(0.3, h, w * 2 + 1))
 	for _, sz in { -1, 1 } do
@@ -220,13 +306,22 @@ local function buildStand(root: Instance, name: string, cf: CFrame, length: numb
 		local w = sector[2] - sector[1]
 		local cx = (sector[1] + sector[2]) / 2
 		place(CFrame.new(cx, FIRST_ROW / 2, 0.5), Vector3.new(w, FIRST_ROW, 1), WHITE)
+		local glass = place(CFrame.new(cx, FIRST_ROW + 0.6, 0.5), Vector3.new(w, 1.2, 0.2), Color3.fromRGB(200, 225, 240), Enum.Material.Glass)
+		glass.Transparency = 0.6
+		place(CFrame.new(cx, FIRST_ROW + 1.25, 0.5), Vector3.new(w, 0.15, 0.3), Color3.fromRGB(190, 195, 200), Enum.Material.Metal)
 		for i = 0, ROWS - 1 do
 			local top = FIRST_ROW + i * ROW_RISE
 			local z0 = 1 + i * ROW_DEPTH
-			local seatColor = if i % 2 == 0 then GREEN else WHITE
 			place(CFrame.new(cx, top / 2, z0 + ROW_DEPTH / 2), Vector3.new(w, top, ROW_DEPTH), CONCRETE)
-			place(CFrame.new(cx, top + 0.5, z0 + 1.6), Vector3.new(w, 1, 1.4), seatColor, Enum.Material.SmoothPlastic)
-			place(CFrame.new(cx, top + 1.5, z0 + 3.2), Vector3.new(w, 3, 0.4), seatColor, Enum.Material.SmoothPlastic)
+			-- Разноцветные сиденья мозаикой, как на стадионе «Алваладе»
+			local chunks = math.max(1, math.floor(w / 5))
+			local chunkW = w / chunks
+			for c = 0, chunks - 1 do
+				local seatColor = SEAT_COLORS[mosaic:NextInteger(1, #SEAT_COLORS)]
+				local x = sector[1] + chunkW * (c + 0.5)
+				place(CFrame.new(x, top + 0.5, z0 + 1.6), Vector3.new(chunkW - 0.25, 1, 1.4), seatColor, Enum.Material.SmoothPlastic)
+				place(CFrame.new(x, top + 1.5, z0 + 3.2), Vector3.new(chunkW - 0.25, 3, 0.4), seatColor, Enum.Material.SmoothPlastic)
+			end
 		end
 	end
 
@@ -277,8 +372,9 @@ local function buildStand(root: Instance, name: string, cf: CFrame, length: numb
 	local lamps = 6
 	for k = 1, lamps do
 		local x = -length / 2 + length * (k - 0.5) / lamps
-		local lamp = box(m, cf * CFrame.new(x, ROOF_Y - 0.7, -2), Vector3.new(3, 0.4, 1.5), WHITE, Enum.Material.Neon)
+		local lamp = box(m, cf * CFrame.new(x, ROOF_Y - 0.9, -2.5) * CFrame.Angles(math.rad(-25), 0, 0), Vector3.new(8, 0.5, 2), Color3.fromRGB(255, 250, 235), Enum.Material.Neon)
 		lamp.CanCollide = false
+		box(m, cf * CFrame.new(x, ROOF_Y - 0.55, -2.4) * CFrame.Angles(math.rad(-25), 0, 0), Vector3.new(8.4, 0.3, 2.4), DARK, Enum.Material.Metal).CanCollide = false
 		local spot = Instance.new("SpotLight")
 		spot.Face = Enum.NormalId.Bottom
 		spot.Angle = 110
@@ -407,8 +503,24 @@ end
 local function buildLobby(root: Instance, center: Vector3)
 	local m = folder("Lobby", root)
 	local size = 60
-	local floor = box(m, CFrame.new(center), Vector3.new(size, 1, size), Color3.fromRGB(180, 220, 255), Enum.Material.Glass)
-	floor.Transparency = 0.35
+	-- VIP-ложа: ковёр цвета газона, деревянный край, стеклянные стены с видом на ночной город
+	box(m, CFrame.new(center), Vector3.new(size, 1, size), Color3.fromRGB(30, 95, 55), Enum.Material.Fabric)
+	box(m, CFrame.new(center + Vector3.new(0, 0.55, 0)), Vector3.new(size - 8, 0.1, size - 8), Color3.fromRGB(40, 120, 70), Enum.Material.Fabric)
+	for _, d in { Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0), Vector3.new(0, 0, 1), Vector3.new(0, 0, -1) } do
+		local trimSize = if d.X ~= 0 then Vector3.new(2, 1.2, size) else Vector3.new(size, 1.2, 2)
+		box(m, CFrame.new(center + d * (size / 2 - 1) + Vector3.new(0, 1, 0)), trimSize, Color3.fromRGB(120, 85, 55), Enum.Material.Wood)
+	end
+	for _, x in { -18, 18 } do
+		for _, z in { -18, 18 } do
+			local lamp = box(m, CFrame.new(center + Vector3.new(x, 13.3, z)), Vector3.new(4, 0.3, 4), Color3.fromRGB(255, 240, 210), Enum.Material.Neon)
+			lamp.CanCollide = false
+			local light = Instance.new("PointLight")
+			light.Range = 30
+			light.Brightness = 1.2
+			light.Color = Color3.fromRGB(255, 235, 200)
+			light.Parent = lamp
+		end
+	end
 	for _, d in { Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0), Vector3.new(0, 0, 1), Vector3.new(0, 0, -1) } do
 		local wallSize = if d.X ~= 0 then Vector3.new(1, 14, size) else Vector3.new(size, 14, 1)
 		local wall = box(m, CFrame.new(center + d * (size / 2) + Vector3.new(0, 7, 0)), wallSize, WHITE, Enum.Material.Glass)
@@ -421,8 +533,8 @@ local function buildLobby(root: Instance, center: Vector3)
 	spawn.Anchored = true
 	spawn.Size = Vector3.new(12, 1, 12)
 	spawn.CFrame = CFrame.new(center + Vector3.new(0, 0.6, 0))
-	spawn.Color = GREEN
-	spawn.Material = Enum.Material.SmoothPlastic
+	spawn.Color = Color3.fromRGB(255, 200, 50)
+	spawn.Material = Enum.Material.Foil
 	spawn.Neutral = true
 	spawn.Duration = 0
 	spawn.Parent = m
@@ -517,7 +629,7 @@ function StadiumBuilder.build()
 		table.insert(hideSpots, Vector3.new(s * 125, 0, s * -100)) -- углы стадиона
 	end
 
-	local lobbyCenter = Vector3.new(0, 160, 0)
+	local lobbyCenter = Vector3.new(0, 250, -650) -- далеко за городом, чтобы не висело над стадионом
 	buildLobby(root, lobbyCenter)
 
 	local seekerBoxCenter = Vector3.new(0, 300, 400)
@@ -531,6 +643,27 @@ function StadiumBuilder.build()
 			table.insert(statueHomes, CFrame.lookAt(pos, Vector3.new(x, 0, 0)))
 		end
 	end
+
+	local details = StadiumDetails.build(root, {
+		FieldX = FIELD_X,
+		FieldZ = FIELD_Z,
+		GroundX = GROUND_X,
+		GroundZ = GROUND_Z,
+		GoalHalfWidth = GOAL_HALF_WIDTH,
+		GoalHeight = GOAL_HEIGHT,
+		GoalDepth = GOAL_DEPTH,
+		RoofY = ROOF_Y,
+		StandDepth = STAND_DEPTH,
+		Stands = {
+			{ cf = northCF, length = 230, skip = 32 }, -- за главной трибуной стоят раздевалки
+			{ cf = southCF, length = 230 },
+			{ cf = eastCF, length = 170 },
+			{ cf = westCF, length = 170 },
+		},
+		BenchX = 25,
+		JailCenter = jailCenter,
+		LobbyCenter = lobbyCenter,
+	})
 
 	root.Parent = Workspace
 
@@ -548,6 +681,7 @@ function StadiumBuilder.build()
 		StatueHomes = statueHomes,
 		Scoreboard = scoreboard,
 		StatueColor = STATUE_STONE,
+		AdBoards = details.AdBoards,
 	}
 end
 
