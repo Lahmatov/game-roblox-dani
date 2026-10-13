@@ -89,13 +89,14 @@ local statusLabel = label(gui, "", UDim2.new(0.7, 0, 0, 40), UDim2.new(0.15, 0, 
 
 -- Кнопки суперспособностей
 local abilities = Instance.new("Frame")
-abilities.Size = UDim2.fromOffset(170, 200)
-abilities.Position = UDim2.new(1, -180, 1, -320)
+abilities.Size = UDim2.fromOffset(170, 270)
+abilities.Position = UDim2.new(1, -180, 1, -390)
 abilities.BackgroundTransparency = 1
 abilities.Parent = gui
 local dashButton = button(abilities, "Рывок (Q)", UDim2.new(1, 0, 0, 58), UDim2.fromOffset(0, 0), Color3.fromRGB(30, 120, 220))
 local kickButton = button(abilities, "Мяч (F)", UDim2.new(1, 0, 0, 58), UDim2.fromOffset(0, 70), GREEN)
 local transformButton = button(abilities, "Предмет (E)", UDim2.new(1, 0, 0, 58), UDim2.fromOffset(0, 140), Color3.fromRGB(230, 120, 20))
+local tauntButton = button(abilities, "Дразнилка (T)", UDim2.new(1, 0, 0, 58), UDim2.fromOffset(0, 210), Color3.fromRGB(200, 50, 160))
 
 -- Сердцебиение: края экрана краснеют, когда водящий рядом
 local heartFrame = Instance.new("Frame")
@@ -242,6 +243,10 @@ local function transform()
 end
 dashButton.Activated:Connect(dash)
 transformButton.Activated:Connect(transform)
+local function taunt()
+	Remotes.get("Taunt"):FireServer()
+end
+tauntButton.Activated:Connect(taunt)
 kickButton.Activated:Connect(kick)
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then
@@ -253,6 +258,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		kick()
 	elseif input.KeyCode == Enum.KeyCode.E then
 		transform()
+	elseif input.KeyCode == Enum.KeyCode.T then
+		taunt()
 	end
 end)
 
@@ -307,8 +314,25 @@ local function playSound(name: string, position: Vector3?)
 	if position then
 		sound.RollOffMaxDistance = 150
 	end
+	local info = Config.SOUNDS[name]
+	sound.TimePosition = info.Start or 0
 	sound:Play()
-	task.delay(8, function()
+	-- Нарезка: через Length секунд плавно стихает
+	if info.Length then
+		local volume = sound.Volume
+		task.delay(math.max(0, info.Length - 1), function()
+			if sound.Parent then
+				TweenService:Create(sound, TweenInfo.new(1), { Volume = 0 }):Play()
+			end
+		end)
+		task.delay(info.Length, function()
+			if sound.Parent then
+				sound:Stop()
+				sound.Volume = volume
+			end
+		end)
+	end
+	task.delay(math.max(8, (info.Length or 0) + 1), function()
 		if holder then
 			holder:Destroy()
 		else
@@ -532,6 +556,9 @@ RunService.RenderStepped:Connect(function(dt)
 		kickButton.BackgroundTransparency = if kickReady and phase == "Seeking" then 0 else 0.5
 		local prop = player:GetAttribute("Prop")
 		transformButton.Text = if prop then "Стать собой (E)" else "Предмет (E)"
+		local tauntText, tauntReady = cooldownText("Дразнилка (T)", player:GetAttribute("TauntReadyAt") or 0, t)
+		tauntButton.Text = tauntText
+		tauntButton.BackgroundTransparency = if tauntReady and phase == "Seeking" then 0 else 0.5
 	end
 
 	local inLobby = role == "Lobby"

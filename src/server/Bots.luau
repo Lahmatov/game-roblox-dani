@@ -510,6 +510,9 @@ local function thinkHider(brain: Brain, position: Vector3)
 			if math.random() < level.TalkChance then
 				say(bot, if Transform.isTransformed(bot) then "prop" else "idle")
 			end
+			if math.random() < level.TalkChance then
+				Abilities.tryTaunt(bot) -- глупые боты сами себя выдают дразнилкой
+			end
 			if not Transform.isTransformed(bot) and math.random() < level.TransformChance then
 				if Transform.transform(bot) then
 					Sfx.play("Transform", position)

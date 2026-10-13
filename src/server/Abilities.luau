@@ -16,6 +16,7 @@ local Abilities = {}
 
 local gameState: Folder
 local announce: (string, Color3?) -> ()
+local onTaunt: ((any) -> ())? = nil
 
 local function phase(): string
 	return gameState:GetAttribute("Phase") or "Waiting"
@@ -79,9 +80,14 @@ local function kickBall(player: Player, direction: Vector3)
 	end)
 end
 
-function Abilities.start(state: Folder, announceFn: (string, Color3?) -> ())
+function Abilities.start(state: Folder, announceFn: (string, Color3?) -> (), tauntFn: ((any) -> ())?)
 	gameState = state
 	announce = announceFn
+	onTaunt = tauntFn
+
+	Remotes.get("Taunt").OnServerEvent:Connect(function(player)
+		Abilities.tryTaunt(player)
+	end)
 
 	Remotes.get("Dash").OnServerEvent:Connect(function(player)
 		Abilities.tryDash(player)
@@ -119,9 +125,24 @@ function Abilities.tryKick(player, direction): boolean
 	return true
 end
 
+-- Дразнилка: смешной звук там, где стоишь. Водящий слышит — зато дают монеты.
+function Abilities.tryTaunt(player): boolean
+	local t = PlayerState.now()
+	if not canUse(player) or phase() ~= "Seeking" or (player:GetAttribute("TauntReadyAt") or 0) > t then
+		return false
+	end
+	player:SetAttribute("TauntReadyAt", t + Config.TAUNT_COOLDOWN)
+	Sfx.play("Taunt" .. math.random(1, Config.TAUNT_COUNT), PlayerState.getPosition(player))
+	if onTaunt then
+		onTaunt(player)
+	end
+	return true
+end
+
 function Abilities.resetCooldowns(player: Player)
 	player:SetAttribute("DashReadyAt", 0)
 	player:SetAttribute("KickReadyAt", 0)
+	player:SetAttribute("TauntReadyAt", 0)
 end
 
 return Abilities

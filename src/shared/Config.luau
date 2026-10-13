@@ -118,6 +118,9 @@ Config.HEARTBEAT_DISTANCE = 45
 -- Пустые ("") — впиши номер звука из Creator Store: "rbxassetid://НОМЕР".
 -- Бесплатные звуки и музыку от Roblox можно найти в Studio: Toolbox -> Audio,
 -- лучше брать те, где автор — Roblox (их можно использовать в любой игре).
+-- Нарезка: Start — с какой секунды трека играть, Length — сколько секунд (потом звук плавно стихнет).
+-- Например: GoalSong = { Id = "rbxassetid://123456", Start = 42, Length = 8 }
+-- Нарезки из настоящих песен (YouTube, Spotify) загружать нельзя — Roblox их удалит.
 Config.SOUNDS = {
 	Whistle = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 1, Speed = 0.7 }, -- начало поисков
 	Goal = { Id = "rbxasset://sounds/victory.wav", Volume = 1 }, -- гол
@@ -134,7 +137,24 @@ Config.SOUNDS = {
 	RoundMusic = { Id = "", Volume = 0.2 }, -- музыка во время поисков
 	Crowd = { Id = "", Volume = 0.4 }, -- гул болельщиков на стадионе
 	Cheer = { Id = "", Volume = 1 }, -- болельщики кричат на гол
+
+	-- Нарезки песен на важные моменты
+	GoalSong = { Id = "", Volume = 0.8, Start = 0, Length = 8 }, -- на гол
+	HidersWinSong = { Id = "", Volume = 0.8, Start = 0, Length = 8 }, -- прячущиеся победили
+	SeekerWinSong = { Id = "", Volume = 0.8, Start = 0, Length = 8 }, -- водящий победил
+	LastMinuteSong = { Id = "", Volume = 0.6, Start = 0, Length = 10 }, -- осталась минута
+	TrophySong = { Id = "", Volume = 0.7, Start = 0, Length = 6 }, -- кто-то нашёл Кубок
+
+	-- Дразнилки: прячущийся нажимает T — играет смешной звук там, где он стоит
+	Taunt1 = { Id = "rbxasset://sounds/uuhhh.mp3", Volume = 1, Speed = 1.4 },
+	Taunt2 = { Id = "rbxasset://sounds/uuhhh.mp3", Volume = 1, Speed = 0.6 },
+	Taunt3 = { Id = "rbxasset://sounds/victory.wav", Volume = 0.8, Speed = 1.8, Length = 2 },
+	Taunt4 = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 1, Speed = 0.5 },
+	Taunt5 = { Id = "", Volume = 1, Start = 0, Length = 3 }, -- свой мемный звук
+	Taunt6 = { Id = "", Volume = 1, Start = 0, Length = 3 }, -- свой мемный звук
 }
+Config.TAUNT_COUNT = 6
+Config.TAUNT_COOLDOWN = 20
 
 -- Монеты
 Config.COINS = {
@@ -143,6 +163,7 @@ Config.COINS = {
 	GOAL = 100, -- кто забил Кубок в ворота
 	CATCH = 10, -- водящему за каждого пойманного
 	RESCUE = 15, -- за освобождение друга
+	TAUNT = 3, -- за дразнилку (водящий слышит, где ты!)
 }
 
 -- Футбольные формы в магазине.

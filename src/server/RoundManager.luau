@@ -208,6 +208,7 @@ end
 local function celebrateGoal(position: Vector3)
 	Sfx.play("Goal")
 	Sfx.play("Cheer")
+	Sfx.play("GoalSong")
 	local holder = Instance.new("Part")
 	holder.Anchored = true
 	holder.CanCollide = false
@@ -303,6 +304,7 @@ local function tick(): (string?, string?, Player?)
 	if picked then
 		Transform.revert(picked) -- с Кубком над головой предметом не притворишься
 		Sfx.play("Trophy")
+		Sfx.play("TrophySong")
 		announce(picked.DisplayName .. " нашёл Кубок мира! Беги к воротам!", GOLD)
 	end
 	local carrier = Trophy.getCarrier()
@@ -351,6 +353,11 @@ local function endRound(winner: string?, reason: string, hero: Player?)
 	Transform.revertAll()
 	seekerModel.Value = nil
 	announce(reason, if winner == "Seeker" then SEEKER_RED else HIDER_GREEN)
+	if winner == "Hiders" then
+		Sfx.play("HidersWinSong")
+	elseif winner == "Seeker" then
+		Sfx.play("SeekerWinSong")
+	end
 
 	for _, player in hiders do
 		if player.Parent then
@@ -452,7 +459,13 @@ local function runRound()
 	announce("Водящий вышел искать! Найдите Кубок мира и забейте его в ворота!", GOLD)
 
 	local lastCounters = 0
+	local lastMinuteAnnounced = false
 	while true do
+		if not lastMinuteAnnounced and timeLeft() <= 60 then
+			lastMinuteAnnounced = true
+			Sfx.play("LastMinuteSong")
+			announce("Осталась 1 минута! Скорее несите Кубок к воротам!", GOLD)
+		end
 		local winner, reason, hero = tick()
 		if reason then
 			endRound(winner, reason, hero)
@@ -511,7 +524,9 @@ function RoundManager.start(builtMap)
 
 	Trophy.init(gameState)
 	Statues.build(map.Root, map.StatueHomes, map.StatueColor, announce)
-	Abilities.start(gameState, announce)
+	Abilities.start(gameState, announce, function(participant)
+		Economy.addCoins(participant, Config.COINS.TAUNT)
+	end)
 
 	local function setupPlayer(player: Player)
 		PlayerState.setRole(player, "Lobby")

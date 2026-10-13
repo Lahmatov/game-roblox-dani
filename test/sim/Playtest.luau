@@ -222,6 +222,28 @@ fire("Dash", bo)
 Mock.advance(0.2)
 check(hum(bo).WalkSpeed == Config.SEEKER_SPEED, "водящий рывок не может")
 
+-- Дразнилка
+local anaCoins = ana:GetAttribute("Coins") or 0
+local tauntsBefore = 0
+for name, n in Mock.sfx do
+	if string.find(name, "Taunt", 1, true) then
+		tauntsBefore += n
+	end
+end
+fire("Taunt", ana)
+Mock.advance(0.2)
+local tauntsAfter = 0
+for name, n in Mock.sfx do
+	if string.find(name, "Taunt", 1, true) then
+		tauntsAfter += n
+	end
+end
+check(tauntsAfter == tauntsBefore + 1, "дразнилка: у Ana прозвучал смешной звук")
+check(ana:GetAttribute("Coins") == anaCoins + Config.COINS.TAUNT, "за дразнилку дали монеты")
+fire("Taunt", ana)
+Mock.advance(0.2)
+check(ana:GetAttribute("Coins") == anaCoins + Config.COINS.TAUNT, "вторую дразнилку сразу нельзя (ждать 20 секунд)")
+
 -- Мяч
 teleport(ana, V(40, 0, -30))
 teleport(bo, V(55, 0, -30))
@@ -462,6 +484,7 @@ check(Mock.advanceUntil(function()
 	return phase() == "End"
 end, 120), "время раунда кончилось")
 check(announced("Время вышло"), "время вышло — водящий победил")
+check(announced("Осталась 1 минута"), "за минуту до конца — сообщение и нарезка песни")
 
 -- РАУНД 4 ---------------------------------------------------------------
 section("Раунд 4: игроки уходят")
@@ -760,6 +783,30 @@ for _, name in { "Whistle", "Catch", "Rescue", "Trophy", "Goal", "Kick", "Dash",
 	check((Mock.sfx[name] or 0) > 0, "звучит «" .. name .. "» (" .. tostring(Mock.sfx[name] or 0) .. " раз)")
 end
 check(Mock.emitted > 0, "на гол — салют из конфетти")
+for _, name in { "GoalSong", "HidersWinSong", "SeekerWinSong", "LastMinuteSong", "TrophySong" } do
+	check((Mock.sfx[name] or 0) > 0, "нарезка «" .. name .. "» запускается в нужный момент")
+end
+
+section("Нарезка песни")
+local clientConfig = Mock.require(shared.Config, "client")
+clientConfig.SOUNDS.GoalSong = { Id = "rbxassetid://1", Volume = 0.8, Start = 42, Length = 8 }
+local listener = Mock.addPlayer("Lena")
+Mock.spawnCharacter(listener)
+Mock.localPlayer = listener
+Players.LocalPlayer = listener
+Mock.runScript(playerScripts.Main, "client")
+Mock.advance(0.5)
+Remotes.Sfx.OnClientEvent:Fire("GoalSong", nil)
+Mock.advance(0.2)
+local song = findGui(listener, function(d)
+	return d.ClassName == "Sound" and d.SoundId == "rbxassetid://1"
+end)
+check(song and song.TimePosition == 42 and song.IsPlaying, "нарезка играет с 42-й секунды трека")
+Mock.advance(6)
+check(song.IsPlaying, "через 6 секунд ещё играет")
+Mock.advance(2.5)
+check(not song.IsPlaying, "через 8 секунд нарезка закончилась")
+Mock.removePlayer(listener)
 
 section("Итог")
 for _, e in Mock.errors do
