@@ -90,6 +90,8 @@ local function load(player: Player)
 	profiles[player] = profile
 end
 
+local BODY_PARTS = { "TorsoColor3", "LeftArmColor3", "RightArmColor3", "LeftLegColor3", "RightLegColor3" }
+
 function Economy.applyKit(player: Player)
 	local profile = profiles[player]
 	local character = player.Character
@@ -110,11 +112,33 @@ function Economy.applyKit(player: Player)
 		colors = Instance.new("BodyColors")
 		colors.Parent = character
 	end
-	colors.TorsoColor3 = kit.Shirt
-	colors.LeftArmColor3 = kit.Shirt
-	colors.RightArmColor3 = kit.Shirt
-	colors.LeftLegColor3 = kit.Shorts
-	colors.RightLegColor3 = kit.Shorts
+	-- Запоминаем настоящий цвет кожи, чтобы вернуть его под формой с рисунком
+	if not colors:GetAttribute("Saved") then
+		for _, name in BODY_PARTS do
+			colors:SetAttribute(name, (colors :: any)[name])
+		end
+		colors:SetAttribute("Saved", true)
+	end
+
+	local shirtId = kit.ShirtTemplate or 0
+	local pantsId = kit.PantsTemplate or 0
+	if shirtId > 0 and pantsId > 0 then
+		for _, name in BODY_PARTS do
+			(colors :: any)[name] = colors:GetAttribute(name)
+		end
+		local shirt = Instance.new("Shirt")
+		shirt.ShirtTemplate = "rbxassetid://" .. shirtId
+		shirt.Parent = character
+		local pants = Instance.new("Pants")
+		pants.PantsTemplate = "rbxassetid://" .. pantsId
+		pants.Parent = character
+	else
+		colors.TorsoColor3 = kit.Shirt
+		colors.LeftArmColor3 = kit.Shirt
+		colors.RightArmColor3 = kit.Shirt
+		colors.LeftLegColor3 = kit.Shorts
+		colors.RightLegColor3 = kit.Shorts
+	end
 end
 
 function Economy.addCoins(player: Player, amount: number)

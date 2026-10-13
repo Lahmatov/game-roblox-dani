@@ -57,17 +57,23 @@ Config.COINS = {
 	RESCUE = 15, -- за освобождение друга
 }
 
--- Футбольные формы в магазине
+-- Футбольные формы в магазине.
+-- Формы с рисунком (Template) — по дизайну Дани. Картинки лежат в assets/kits/.
+-- Загрузи <kit>_shirt.png и <kit>_pants.png в Roblox (Creator Hub -> Decals) и впиши номера
+-- картинок в ShirtTemplate и PantsTemplate. Пока там 0, форма показывается просто цветом.
 Config.KITS = {
+	{ Id = "Lions", Name = "Зелёные львы", Price = 0, Shirt = Color3.fromRGB(11, 138, 69), Shorts = Color3.fromRGB(255, 255, 255), ShirtTemplate = 0, PantsTemplate = 0 },
+	{ Id = "Stars", Name = "Красные звёзды", Price = 150, Shirt = Color3.fromRGB(211, 34, 34), Shorts = Color3.fromRGB(181, 27, 27), ShirtTemplate = 0, PantsTemplate = 0 },
+	{ Id = "Night", Name = "Ночная молния", Price = 300, Shirt = Color3.fromRGB(28, 28, 34), Shorts = Color3.fromRGB(28, 28, 34), ShirtTemplate = 0, PantsTemplate = 0 },
+	{ Id = "GoldKit", Name = "Золотая с короной", Price = 1000, Shirt = Color3.fromRGB(245, 191, 42), Shorts = Color3.fromRGB(234, 178, 32), ShirtTemplate = 0, PantsTemplate = 0 },
 	{ Id = "Sporting", Name = "Спортинг", Price = 0, Shirt = Color3.fromRGB(0, 128, 72), Shorts = Color3.fromRGB(255, 255, 255) },
 	{ Id = "Real", Name = "Реал", Price = 150, Shirt = Color3.fromRGB(245, 245, 245), Shorts = Color3.fromRGB(245, 245, 245) },
 	{ Id = "Barca", Name = "Барса", Price = 150, Shirt = Color3.fromRGB(165, 0, 68), Shorts = Color3.fromRGB(0, 77, 152) },
 	{ Id = "Portugal", Name = "Португалия", Price = 200, Shirt = Color3.fromRGB(200, 16, 46), Shorts = Color3.fromRGB(0, 102, 51) },
 	{ Id = "Brazil", Name = "Бразилия", Price = 200, Shirt = Color3.fromRGB(255, 220, 0), Shorts = Color3.fromRGB(0, 56, 168) },
 	{ Id = "Argentina", Name = "Аргентина", Price = 200, Shirt = Color3.fromRGB(117, 170, 219), Shorts = Color3.fromRGB(20, 20, 20) },
-	{ Id = "Gold", Name = "Золотая", Price = 1000, Shirt = Color3.fromRGB(255, 200, 40), Shorts = Color3.fromRGB(255, 200, 40) },
 }
-Config.DEFAULT_KIT = "Sporting"
+Config.DEFAULT_KIT = "Lions"
 
 function Config.getKit(id: string)
 	for _, kit in Config.KITS do
